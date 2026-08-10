@@ -24,10 +24,14 @@ type YoutubeManager struct {
 	binary     string
 	ffmpeg     string
 	lastOutput string
+	reqs       map[string]YoutubeDownloadRequest
 }
 
 func NewYoutubeManager(app *App) *YoutubeManager {
-	return &YoutubeManager{app: app}
+	return &YoutubeManager{
+		app:  app,
+		reqs: make(map[string]YoutubeDownloadRequest),
+	}
 }
 
 func (y *YoutubeManager) ensureBinary() (string, error) {
@@ -229,8 +233,23 @@ type rawInfo struct {
 	} `json:"entries"`
 }
 
-func (y *YoutubeManager) setReq(req YoutubeDownloadRequest) {
-	y.app.setReq(req)
+func (y *YoutubeManager) setReq(id string, req YoutubeDownloadRequest) {
+	y.mu.Lock()
+	y.reqs[id] = req
+	y.mu.Unlock()
+}
+
+func (y *YoutubeManager) getReq(id string) (YoutubeDownloadRequest, bool) {
+	y.mu.Lock()
+	defer y.mu.Unlock()
+	req, ok := y.reqs[id]
+	return req, ok
+}
+
+func (y *YoutubeManager) deleteReq(id string) {
+	y.mu.Lock()
+	delete(y.reqs, id)
+	y.mu.Unlock()
 }
 
 func (y *YoutubeManager) Info(url string) (*YoutubeInfo, error) {	exe, err := y.ensureBinary()
@@ -358,10 +377,11 @@ func (y *YoutubeManager) Run(ctx context.Context, d *Download) error {
 	if err != nil {
 		return err
 	}
-	req := y.app.youtubeReq
-	if req == nil {
-		return fmt.Errorf("missing youtube request")
+	req, ok := y.getReq(d.ID)
+	if !ok {
+		return fmt.Errorf("missing youtube request for download %s", d.ID)
 	}
+	defer y.deleteReq(d.ID)
 
 	ffmpeg := ""
 	if p, err := y.ensureFFmpeg(); err == nil {
@@ -373,12 +393,22 @@ func (y *YoutubeManager) Run(ctx context.Context, d *Download) error {
 		}
 	}
 
+	targetContainer := req.Container
+	if targetContainer == "" || targetContainer == "auto" {
+		if strings.Contains(req.Format, "[ext=mp4]") {
+			targetContainer = "mp4"
+		}
+	}
+
 	args := []string{"--newline", "--progress", "--no-warnings"}
 	if req.Format != "" && req.Format != "best" {
 		args = append(args, "-f", req.Format)
 	}
 	if ffmpeg != "" {
 		args = append(args, "--ffmpeg-location", filepath.Dir(ffmpeg))
+	}
+	if targetContainer != "" && targetContainer != "auto" {
+		args = append(args, "--merge-output-format", targetContainer, "--remux-video", targetContainer)
 	}
 	if req.PlaylistItems != "" {
 		args = append(args, "--playlist-items", req.PlaylistItems)
@@ -390,6 +420,7 @@ func (y *YoutubeManager) Run(ctx context.Context, d *Download) error {
 		"--print", "after_move:filepath",
 		req.URL,
 	)
+	y.app.hub.Broadcast(Event{Type: "log", Data: "yt-dlp " + strings.Join(args, " ")})
 
 	cmd := exec.CommandContext(ctx, exe, args...)
 	stdout, err := cmd.StdoutPipe()

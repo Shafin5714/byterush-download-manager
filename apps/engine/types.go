@@ -89,4 +89,5 @@ type YoutubeDownloadRequest struct {
 	Format        string `json:"format"`
 	PlaylistItems string `json:"playlistItems"`
 	Folder        string `json:"folder"`
+	Container     string `json:"container"`
 }

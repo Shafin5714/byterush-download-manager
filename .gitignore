@@ -4,11 +4,10 @@ dist/
 out/
 release/
 
-# Go
+# Go & Binaries
+*.exe
+*.exe~
 apps/engine/bin/
-
-# Built engine binary (reproduced by npm run build:engine)
-apps/desktop/resources/engine.exe
 
 # Logs
 *.log

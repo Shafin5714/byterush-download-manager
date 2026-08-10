@@ -19,6 +19,7 @@ export default function AddModal({ onClose }: Props) {
   const [filename, setFilename] = useState('')
   const [folder, setFolder] = useState(settings?.downloadDir ?? '')
   const [ytFormat, setYtFormat] = useState('bestvideo*+bestaudio/best')
+  const [container, setContainer] = useState('auto')
   const [selectedEntries, setSelectedEntries] = useState<Set<number>>(new Set())
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -74,7 +75,9 @@ export default function AddModal({ onClose }: Props) {
                 .map((i) => i + 1)
                 .join(',')
             : undefined
-        await api.youtubeDownload(url, ytFormat, items, folder || undefined)
+        const selectedFmt = ytInfo.formats?.find((f) => f.id === ytFormat)
+        const effectiveContainer = container !== 'auto' ? container : (selectedFmt?.ext === 'mp4' ? 'mp4' : 'auto')
+        await api.youtubeDownload(url, ytFormat, items, folder || undefined, effectiveContainer)
       } else {
         await api.addDownload(url, filename || undefined, folder || undefined)
       }
@@ -207,6 +210,38 @@ export default function AddModal({ onClose }: Props) {
                 </>
               )}
             </div>
+          )}
+
+          {mode === 'youtube' && ytInfo && (
+            <>
+              <label className="field-label">File format</label>
+              <div className="yt-formats">
+                <label className={`yt-format ${container === 'auto' ? 'selected' : ''}`}>
+                  <input
+                    type="radio"
+                    name="container"
+                    checked={container === 'auto'}
+                    onChange={() => setContainer('auto')}
+                  />
+                  <span>
+                    <strong>Auto</strong>
+                    <small>Keep original container (mp4 / webm / mkv)</small>
+                  </span>
+                </label>
+                <label className={`yt-format ${container === 'mp4' ? 'selected' : ''}`}>
+                  <input
+                    type="radio"
+                    name="container"
+                    checked={container === 'mp4'}
+                    onChange={() => setContainer('mp4')}
+                  />
+                  <span>
+                    <strong>MP4</strong>
+                    <small>Merge output into .mp4 container</small>
+                  </span>
+                </label>
+              </div>
+            </>
           )}
 
           {mode !== 'youtube' && (

@@ -38,8 +38,8 @@ export const api = {
   getSettings: () => req<Settings>('GET', '/api/settings'),
   saveSettings: (s: Partial<Settings>) => req<Settings>('POST', '/api/settings', s),
   youtubeInfo: (url: string) => req<YoutubeInfo>('POST', '/api/youtube/info', { url }),
-  youtubeDownload: (url: string, format: string, playlistItems?: string, folder?: string) =>
-    req<Download>('POST', '/api/youtube/download', { url, format, playlistItems, folder }),
+  youtubeDownload: (url: string, format: string, playlistItems?: string, folder?: string, container?: string) =>
+    req<Download>('POST', '/api/youtube/download', { url, format, playlistItems, folder, container }),
 }
 
 export function connectEvents(onEvent: (e: EngineEvent) => void): () => void {

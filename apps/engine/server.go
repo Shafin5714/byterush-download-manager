@@ -203,7 +203,7 @@ func (a *App) handleYoutubeDownload(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	a.yt.setReq(req)
+	a.yt.setReq(d.ID, req)
 	writeJSON(w, http.StatusAccepted, d)
 }
 
