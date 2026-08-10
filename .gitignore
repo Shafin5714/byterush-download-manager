@@ -1,0 +1,18 @@
+# Node
+node_modules/
+dist/
+out/
+release/
+
+# Go
+apps/engine/bin/
+
+# Built engine binary (reproduced by npm run build:engine)
+apps/desktop/resources/engine.exe
+
+# Logs
+*.log
+
+# OS
+Thumbs.db
+.DS_Store

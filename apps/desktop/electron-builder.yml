@@ -1,0 +1,20 @@
+appId: com.byterush.app
+productName: ByteRush
+directories:
+  output: release
+  buildResources: resources
+files:
+  - out/**
+  - dist/**
+  - package.json
+extraResources:
+  - from: resources/engine.exe
+    to: engine.exe
+win:
+  target:
+    - nsis
+  icon: resources/icon-256.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false

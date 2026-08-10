@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="head">
+        <img src="icons/icon-32.png" alt="" />
+        <div>
+          <h1>ByteRush</h1>
+          <span id="status" class="status off">Engine offline</span>
+        </div>
+      </div>
+      <input id="url" type="text" placeholder="Paste a download URL…" />
+      <button id="send" class="btn">Send to ByteRush</button>
+      <label class="check">
+        <input id="auto" type="checkbox" />
+        Auto-capture downloads from this browser
+      </label>
+      <p class="note">ByteRush must be running. Engine address: 127.0.0.1:29641</p>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,93 @@
+body {
+  width: 300px;
+  margin: 0;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: #161a22;
+  color: #e6e9f0;
+  font-size: 13px;
+}
+
+.wrap {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.head img {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.head h1 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.status {
+  font-size: 11px;
+  color: #8b93a7;
+}
+
+.status.on {
+  color: #2ecc71;
+}
+
+.status.off {
+  color: #e74c3c;
+}
+
+input[type='text'] {
+  background: #0f1115;
+  border: 1px solid #232937;
+  color: #e6e9f0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+input[type='text']:focus {
+  border-color: #4f8cff;
+}
+
+.btn {
+  background: #4f8cff;
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 9px;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: #3a6fd8;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #8b93a7;
+  cursor: pointer;
+}
+
+.note {
+  margin: 0;
+  font-size: 11px;
+  color: #5b6376;
+}
