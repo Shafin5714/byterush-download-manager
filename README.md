@@ -1,21 +1,43 @@
 # ByteRush — Download Manager
 
-A fast, IDM-style download manager for Windows, built with **Electron + React + TypeScript** on the frontend and a **Go download engine** on the backend, with **yt-dlp** powering YouTube downloads.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D6?logo=windows)](https://github.com/Shafin5714/byterush-download-manager)
+[![Backend: Go](https://img.shields.io/badge/Backend-Go%201.22+-00ADD8?logo=go)](https://go.dev)
+[![Frontend: Electron](https://img.shields.io/badge/Frontend-Electron%20%7C%20React-47A248?logo=electron)](https://www.electronjs.org)
+[![Powered by yt-dlp](https://img.shields.io/badge/YouTube-yt--dlp-FF0000?logo=youtube)](https://github.com/yt-dlp/yt-dlp)
 
-> ⚠️ **Legal note:** YouTube's Terms of Service prohibit downloading videos without authorization. Use the YouTube features only for content you own or have explicit permission to download.
+Next-gen Windows download manager with parallel segmented downloading, YouTube video parsing, queue management, and Chrome extension bridge — powered by Go + Electron + yt-dlp.
 
-## Features
+> ⚠️ **Legal note:** YouTube's Terms of Service prohibit downloading videos without authorization. Use YouTube features only for content you own or have explicit permission to download.
 
-- **Segmented downloads** — files are split into chunks (default 8 connections) and fetched in parallel for maximum speed, like IDM.
-- **Resume / pause** — progress is tracked per segment and survives app restarts.
-- **Queue manager** — concurrent-download limits, priority ordering, retry with exponential backoff.
-- **Speed limiter** — global bandwidth cap (token bucket).
-- **YouTube** — paste a video or playlist URL, pick quality/format, download single videos or selected playlist items. yt-dlp is auto-downloaded on first use.
-- **Browser bridge** — optional Chrome/Edge extension that sends downloads to ByteRush (auto-capture or manual).
-- **System tray** — pause all / resume all / quick open.
-- **Persistent history** — downloads are stored in JSON under `%APPDATA%/byterush/engine`.
+---
 
-## Architecture
+## ⚡ Features
+
+- **Segmented Downloads** — Files are split into dynamic chunks (default 8 connections) and fetched in parallel for maximum speed, like IDM.
+- **Resume & Pause** — Connection lost or paused mid-download? Download state is tracked per segment and survives app restarts.
+- **Queue Manager** — Set concurrent download limits, priority ordering, and automatic retries with exponential backoff.
+- **Speed Limiter** — Global bandwidth cap using a token bucket algorithm to avoid choking your network connection.
+- **YouTube Downloader** — Paste single videos or playlist URLs, pick quality/format, and download items smoothly. `yt-dlp` is automatically fetched on first use.
+- **Browser Bridge** — Extension for Chrome & Edge that automatically intercepts downloads or lets you send them manually.
+- **System Tray Integration** — Quick actions to pause all, resume all, or open the dashboard.
+- **Persistent History** — Complete download state persisted in lightweight JSON under `%APPDATA%/byterush/engine`.
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technologies |
+|---|---|
+| **Frontend UI** | Electron, React 18, TypeScript, Vite, CSS Modules |
+| **Download Engine** | Go 1.22+ (Native multi-threaded network engine, stdlib HTTP client) |
+| **Video Processing** | `yt-dlp` (Auto-downloaded binary wrapper) |
+| **Browser Extension** | Manifest V3 (Chrome, Edge, Brave) |
+| **Communication** | HTTP REST API + SSE (Server-Sent Events) on `127.0.0.1:29641` |
+
+---
+
+## 📐 Architecture
 
 ```
 ┌───────────────────────────────────────┐
@@ -23,90 +45,132 @@ A fast, IDM-style download manager for Windows, built with **Electron + React + 
 └──────────────────┬────────────────────┘
                    │  HTTP + SSE (127.0.0.1:<port>)
 ┌──────────────────▼────────────────────┐
-│          Go download engine           │
+│          Go Download Engine           │
 │  segmented downloader · resume ·      │
 │  throttle · queue · yt-dlp wrapper    │
 └───────────────────────────────────────┘
                    ▲
-      Browser extension (MV3) ──┘
+      Browser Extension (MV3) ──┘
 ```
 
-The engine listens on `127.0.0.1:29641` (falls back to the next free port) and exposes a small JSON API:
+The Go backend engine listens on `127.0.0.1:29641` (falls back to next available port) and exposes a JSON REST API:
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /api/downloads` | Add a download `{url, filename?, folder?}` |
-| `GET /api/downloads` | List downloads |
-| `POST /api/downloads/{id}/pause` `/resume` `/cancel` | Control a download |
-| `POST /api/downloads/pause-all` `/resume-all` | Bulk control |
-| `GET/POST /api/settings` | Get/update settings |
-| `POST /api/youtube/info` | Fetch formats/playlist entries via yt-dlp |
-| `POST /api/youtube/download` | Start a YouTube download |
-| `GET /api/events` | SSE stream of progress/status events |
-| `POST /api/shutdown` | Graceful shutdown |
+| `POST /api/downloads` | Add a new download `{url, filename?, folder?}` |
+| `GET /api/downloads` | List all tracked downloads |
+| `POST /api/downloads/{id}/pause` `/resume` `/cancel` | Control specific download state |
+| `POST /api/downloads/pause-all` `/resume-all` | Bulk queue control |
+| `GET/POST /api/settings` | Retrieve or update global settings |
+| `POST /api/youtube/info` | Fetch formats/playlist metadata via yt-dlp |
+| `POST /api/youtube/download` | Start YouTube stream download |
+| `GET /api/events` | SSE stream for real-time progress and speed updates |
+| `POST /api/shutdown` | Graceful shutdown signal |
 
-## Repository layout
+---
+
+## 📁 Repository Layout
 
 ```
-apps/
-├── desktop/     Electron + React + TypeScript app (UI, main process, preload)
-├── engine/      Go download engine (single binary, stdlib only)
-└── extension/   Chrome/Edge MV3 extension (browser capture bridge)
+byterush-download-manager/
+├── apps/
+│   ├── desktop/     Electron + React + TypeScript app (UI, main process, preload)
+│   ├── engine/      Go download engine (single binary backend)
+│   └── extension/   Chrome/Edge MV3 extension (browser integration bridge)
 ```
 
-## Requirements
+---
 
-- Windows 10/11
-- Node.js 20+ and npm
-- Go 1.22+ (only to build the engine)
+## 📋 Requirements
 
-## Development
+- **Operating System**: Windows 10 or Windows 11
+- **For Building from Source**: Node.js 20+ & npm, Go 1.22+
 
+---
+
+## 🚀 Installation
+
+### 1. Pre-built Installer (Recommended)
+1. Download the latest `ByteRush Setup.exe` from [Releases](https://github.com/Shafin5714/byterush-download-manager/releases).
+2. Run the executable and follow the setup instructions.
+3. Launch **ByteRush** from your Start Menu or Desktop shortcut.
+
+### 2. Building from Source
 ```powershell
-# 1. install desktop dependencies
+# Clone the repository
+git clone https://github.com/Shafin5714/byterush-download-manager.git
+cd byterush-download-manager
+
+# Install dependencies and build installer package
 cd apps/desktop
 npm install
-
-# 2. run in dev mode (builds engine, starts Vite + Electron with hot reload)
-npm run dev
+npm run dist
 ```
+The output installer `.exe` will be saved inside `apps/desktop/release/`.
 
-## Building
+### 3. Installing Browser Extension (Chrome / Edge / Brave)
+1. Open `chrome://extensions` or `edge://extensions` in your browser.
+2. Toggle on **Developer mode** in the top right corner.
+3. Click **Load unpacked** and select the `apps/extension/` directory.
+4. The ByteRush extension popup will confirm connection status to the desktop app.
 
+---
+
+## 💻 Development & Testing
+
+### Running Desktop App in Dev Mode
 ```powershell
 cd apps/desktop
-npm run build        # engine + renderer + main process
-npm start            # run the built app
-npm run dist         # produce a Windows NSIS installer in apps/desktop/release/
+npm install
+npm run dev   # Builds Go engine, starts Vite dev server & launches Electron with hot reload
 ```
 
-The built app bundles `resources/engine.exe`; yt-dlp is fetched automatically on first YouTube use.
-
-## Testing the engine alone
-
+### Testing the Go Engine Independently
 ```powershell
 cd apps/engine
 go build -o bin/engine.exe .
-powershell -ExecutionPolicy Bypass -File test.ps1   # runs download/pause/resume/throttle/persistence tests
+powershell -ExecutionPolicy Bypass -File test.ps1   # Runs tests for downloading, pause/resume, throttling, and storage
 ```
 
-## Installing the browser extension
+---
 
-1. Open `edge://extensions` (or `chrome://extensions`).
-2. Enable **Developer mode**.
-3. Click **Load unpacked** and select `apps/extension/`.
-4. Open the ByteRush popup — it shows whether the engine is online and lets you toggle auto-capture.
+## ❓ Troubleshooting & FAQ
 
-ByteRush must be running for the extension to hand downloads off. Capture targets the engine on `127.0.0.1:29641`.
+<details>
+<summary><b>Windows Defender / SmartScreen warning when installing</b></summary>
+<br>
 
-## Roadmap
+Because ByteRush installer is open-source and built without a paid commercial EV Code Signing Certificate, Windows Defender SmartScreen may display a standard *"Unknown Publisher"* message. Click **"More info"** and then **"Run anyway"**.
+</details>
 
-- [ ] Per-download connection count and speed limit
-- [ ] Scheduler (time windows, bandwidth schedules)
-- [ ] Auto-sort into category folders (Videos / Music / Documents…)
-- [ ] Firefox extension port
-- [ ] Auto-update for the app itself
+<details>
+<summary><b>What if port 29641 is already in use by another app?</b></summary>
+<br>
 
-## License
+The Go engine automatically detects if port `29641` is bound and gracefully falls back to the next free port on `127.0.0.1`.
+</details>
 
-MIT — see [LICENSE](LICENSE).
+<details>
+<summary><b>Where is download state & settings stored?</b></summary>
+<br>
+
+Download history and configuration are saved as JSON files in your user data directory at:
+`%APPDATA%/byterush/engine/`
+</details>
+
+---
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome!
+1. Fork the project.
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`).
+4. Push to the branch (`git push origin feature/AmazingFeature`).
+5. Open a Pull Request.
+
+---
+
+## 📜 License
+
+Distributed under the MIT License. See [LICENSE](LICENSE) for more details.
