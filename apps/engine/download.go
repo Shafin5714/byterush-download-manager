@@ -357,10 +357,22 @@ func (m *DownloadManager) downloadHTTP(ctx context.Context, d *Download) error {
 
 	m.mu.Lock()
 	if !segmented {
-		// single stream, resume by current offset if file exists
+		// single stream: resume by current segment offset or saved downloaded count
 		var cur int64
-		if fi, err := os.Stat(d.TempFile); err == nil {
-			cur = fi.Size()
+		if len(d.Segments) > 0 {
+			cur = d.Segments[0].Current
+		} else if d.Downloaded > 0 && info.size > 0 && d.Downloaded < info.size {
+			cur = d.Downloaded
+		} else if info.size <= 0 {
+			if fi, err := os.Stat(d.TempFile); err == nil {
+				cur = fi.Size()
+			}
+		}
+		if _, err := os.Stat(d.TempFile); err != nil {
+			cur = 0
+		}
+		if info.size > 0 && cur >= info.size {
+			cur = 0
 		}
 		d.Segments = []SegmentState{{Index: 0, Start: 0, End: -1, Current: cur}}
 		d.Downloaded = cur
@@ -380,13 +392,22 @@ func (m *DownloadManager) downloadHTTP(ctx context.Context, d *Download) error {
 			segs = append(segs, SegmentState{Index: int(i), Start: start, End: end, Current: start})
 		}
 		d.Segments = segs
+		d.Downloaded = 0
 	} else {
-		// resume: re-check file size matches
-		if fi, err := os.Stat(d.TempFile); err != nil || fi.Size() != info.size {
+		// resume: re-check temp file exists
+		if _, err := os.Stat(d.TempFile); err != nil {
 			for i := range d.Segments {
 				d.Segments[i].Current = d.Segments[i].Start
 			}
 		}
+		sum := int64(0)
+		for i := range d.Segments {
+			sum += d.Segments[i].Current - d.Segments[i].Start
+		}
+		if info.size > 0 && sum > info.size {
+			sum = info.size
+		}
+		d.Downloaded = sum
 	}
 	total := d.TotalSize
 	m.mu.Unlock()
@@ -425,6 +446,9 @@ func (m *DownloadManager) downloadHTTP(ctx context.Context, d *Download) error {
 	sum := int64(0)
 	for i := range d.Segments {
 		sum += d.Segments[i].Current - d.Segments[i].Start
+	}
+	if total > 0 && sum > total {
+		sum = total
 	}
 	d.Downloaded = sum
 	done := sum > 0 && (total <= 0 || sum >= total)
@@ -482,6 +506,10 @@ func (m *DownloadManager) trySegment(ctx context.Context, d *Download, idx int) 
 	seg := d.Segments[idx]
 	m.mu.Unlock()
 
+	if seg.End >= 0 && seg.Current > seg.End {
+		return nil
+	}
+
 	req, err := http.NewRequestWithContext(ctx, "GET", d.URL, nil)
 	if err != nil {
 		return err
@@ -514,6 +542,14 @@ func (m *DownloadManager) trySegment(ctx context.Context, d *Download, idx int) 
 	if resp.StatusCode == http.StatusOK && seg.End >= 0 {
 		// server ignored the range and sent the body from offset 0
 		seg.Current = seg.Start
+		m.mu.Lock()
+		d.Segments[idx] = seg
+		sum := int64(0)
+		for i := range d.Segments {
+			sum += d.Segments[i].Current - d.Segments[i].Start
+		}
+		d.Downloaded = sum
+		m.mu.Unlock()
 	}
 	f, err := os.OpenFile(d.TempFile, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -529,8 +565,20 @@ func (m *DownloadManager) trySegment(ctx context.Context, d *Download, idx int) 
 
 	buf := make([]byte, 256*1024)
 	for {
+		if seg.End >= 0 && seg.Current > seg.End {
+			return nil
+		}
 		n, rerr := resp.Body.Read(buf)
 		if n > 0 {
+			if seg.End >= 0 {
+				rem := seg.End - seg.Current + 1
+				if rem <= 0 {
+					return nil
+				}
+				if int64(n) > rem {
+					n = int(rem)
+				}
+			}
 			m.app.limiter.Wait(n)
 			var werr error
 			if seg.End >= 0 {
@@ -545,7 +593,13 @@ func (m *DownloadManager) trySegment(ctx context.Context, d *Download, idx int) 
 			m.mu.Lock()
 			d.Segments[idx] = seg
 			d.Downloaded += int64(n)
+			if d.TotalSize > 0 && d.Downloaded > d.TotalSize {
+				d.Downloaded = d.TotalSize
+			}
 			m.mu.Unlock()
+		}
+		if seg.End >= 0 && seg.Current > seg.End {
+			return nil
 		}
 		if rerr == io.EOF {
 			if seg.End >= 0 && seg.Current <= seg.End {
