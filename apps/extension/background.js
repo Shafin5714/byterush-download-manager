@@ -42,8 +42,9 @@ chrome.downloads.onCreated.addListener(async (item) => {
     await sendToEngine(item.url, item.filename)
     try {
       await chrome.downloads.cancel(item.id)
+      await chrome.downloads.erase({ id: item.id })
     } catch {
-      /* download already finished */
+      /* download already finished or erased */
     }
   } catch {
     // engine unreachable or server rejected — let the browser download proceed
