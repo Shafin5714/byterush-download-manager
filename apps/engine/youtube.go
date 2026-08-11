@@ -505,7 +505,9 @@ func (y *YoutubeManager) updateProgress(d *Download, down, total int64, speed in
 	d.TotalSize = total
 	d.Speed = speed
 	if d.Speed > 0 && total > down {
-		d.ETA = int64((time.Duration(total-down) / time.Duration(d.Speed)) * time.Second)
+		d.ETA = (total - down) / d.Speed
+	} else {
+		d.ETA = 0
 	}
 	y.mu.Unlock()
 	y.app.hub.Broadcast(Event{Type: "update", Data: d.clone()})

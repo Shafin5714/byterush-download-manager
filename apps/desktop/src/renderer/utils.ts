@@ -15,7 +15,7 @@ export function formatSpeed(s: number): string {
 }
 
 export function formatEta(sec: number): string {
-  if (sec <= 0) return ''
+  if (!sec || sec <= 0 || !Number.isFinite(sec)) return ''
   const h = Math.floor(sec / 3600)
   const m = Math.floor((sec % 3600) / 60)
   const s = Math.floor(sec % 60)

@@ -314,8 +314,10 @@ func (m *DownloadManager) progressTicker() {
 			delta := d.Downloaded - d.lastBytes
 			d.Speed = delta * 4
 			d.lastBytes = d.Downloaded
-			if d.TotalSize > 0 && d.Speed > 0 {
-				d.ETA = int64((time.Duration(d.TotalSize-d.Downloaded) / time.Duration(d.Speed)) * time.Second)
+			if d.TotalSize > 0 && d.Speed > 0 && d.TotalSize > d.Downloaded {
+				d.ETA = (d.TotalSize - d.Downloaded) / d.Speed
+			} else {
+				d.ETA = 0
 			}
 			d.UpdatedAt = time.Now()
 			updates = append(updates, d.clone())
