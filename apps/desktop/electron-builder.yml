@@ -1,5 +1,6 @@
 appId: com.byterush.app
 productName: ByteRush
+artifactName: ByteRush-Setup-${version}.${ext}
 directories:
   output: release
   buildResources: resources
