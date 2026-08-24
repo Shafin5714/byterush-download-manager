@@ -8,6 +8,10 @@ const DEV_URL = process.env.BYTERUSH_DEV_URL || ''
 const SMOKE = process.env.BYTERUSH_SMOKE === '1'
 const isDev = DEV_URL !== ''
 
+if (SMOKE && process.env.BYTERUSH_SMOKE_USER_DATA) {
+  app.setPath('userData', process.env.BYTERUSH_SMOKE_USER_DATA)
+}
+
 let engine: ChildProcess | null = null
 let enginePort = 0
 let tray: Tray | null = null
@@ -102,6 +106,12 @@ function createWindow() {
     backgroundColor: '#0f1115',
     title: 'ByteRush',
     icon: path.join(app.getAppPath(), 'resources', 'icon-256.png'),
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#0b1018',
+      symbolColor: '#8b98aa',
+      height: 38,
+    },
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),

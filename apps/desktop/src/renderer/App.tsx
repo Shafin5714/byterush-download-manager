@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { initStore, store } from './store'
-import Sidebar, { FilterKey } from './components/Sidebar'
+import Sidebar, { type FilterKey } from './components/Sidebar'
 import DownloadList from './components/DownloadList'
 import AddModal from './components/AddModal'
 import SettingsModal from './components/SettingsModal'
@@ -27,25 +27,33 @@ export default function App() {
   }, [])
 
   return (
-    <div className="app">
-      <Sidebar
-        filter={filter}
-        setFilter={setFilter}
-        onAdd={() => setShowAdd(true)}
-        onSettings={() => setShowSettings(true)}
-      />
-      <main className="main">
-        {connected ? (
-          <DownloadList filter={filter} onAdd={() => setShowAdd(true)} />
-        ) : (
-          <div className="connecting">
-            <div className="spinner" />
-            <p>Connecting to download engine…</p>
-          </div>
-        )}
-      </main>
-      {showAdd && <AddModal onClose={() => setShowAdd(false)} />}
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+    <div className="window-shell">
+      <header className="app-titlebar">
+        <div className="titlebar-brand">
+          <span className="titlebar-logo" aria-hidden="true" />
+          <span>ByteRush</span>
+        </div>
+      </header>
+      <div className="app">
+        <Sidebar
+          filter={filter}
+          setFilter={setFilter}
+          onAdd={() => setShowAdd(true)}
+          onSettings={() => setShowSettings(true)}
+        />
+        <main className="main">
+          {connected ? (
+            <DownloadList filter={filter} onAdd={() => setShowAdd(true)} />
+          ) : (
+            <div className="connecting">
+              <div className="spinner" />
+              <p>Connecting to download engine...</p>
+            </div>
+          )}
+        </main>
+        {showAdd && <AddModal onClose={() => setShowAdd(false)} />}
+        {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      </div>
     </div>
   )
 }
