@@ -3,8 +3,8 @@
   "name": "ByteRush Bridge",
   "version": "0.1.0",
   "description": "Sends browser downloads to the ByteRush download manager running on 127.0.0.1:29641.",
-  "permissions": ["downloads", "storage"],
-  "host_permissions": ["http://127.0.0.1:29641/*"],
+  "permissions": ["cookies", "downloads", "storage"],
+  "host_permissions": ["<all_urls>", "http://127.0.0.1:29641/*"],
   "background": {
     "service_worker": "background.js"
   },

@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -112,14 +114,15 @@ func (m *DownloadManager) Add(req AddRequest) (*Download, error) {
 		return nil, err
 	}
 	d := &Download{
-		ID:        newID(),
-		URL:       req.URL,
-		Filename:  req.Filename,
-		Folder:    req.Folder,
-		Kind:      req.Kind,
-		Status:    StatusQueued,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:             newID(),
+		URL:            req.URL,
+		Filename:       req.Filename,
+		Folder:         req.Folder,
+		Kind:           req.Kind,
+		Status:         StatusQueued,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+		requestHeaders: sanitizeRequestHeaders(req.RequestHeaders),
 	}
 	m.mu.Lock()
 	m.downloads[d.ID] = d
@@ -330,7 +333,8 @@ func (m *DownloadManager) progressTicker() {
 }
 
 func (m *DownloadManager) downloadHTTP(ctx context.Context, d *Download) error {
-	info, err := probeURL(ctx, d.URL)
+	client := &http.Client{Transport: m.app.transport}
+	info, err := probeURL(ctx, client, d.URL, d.requestHeaders)
 	if err != nil {
 		return err
 	}
@@ -517,6 +521,7 @@ func (m *DownloadManager) trySegment(ctx context.Context, d *Download, idx int) 
 	if seg.End >= 0 {
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", seg.Current, seg.End))
 	}
+	applyRequestHeaders(req, d.requestHeaders)
 	client := &http.Client{Transport: m.app.transport}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -536,7 +541,7 @@ func (m *DownloadManager) trySegment(ctx context.Context, d *Download, idx int) 
 			return fmt.Errorf("server does not support range requests")
 		}
 	} else {
-		return fmt.Errorf("unexpected HTTP status %d", resp.StatusCode)
+		return probeStatusError(resp)
 	}
 
 	if resp.StatusCode == http.StatusOK && seg.End >= 0 {
@@ -620,44 +625,83 @@ type probeResult struct {
 	filename     string
 }
 
-func probeURL(ctx context.Context, url string) (*probeResult, error) {
-	client := &http.Client{Transport: &http.Transport{Proxy: http.ProxyFromEnvironment}, Timeout: 15 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, "HEAD", url, nil)
+func probeURL(ctx context.Context, client *http.Client, rawURL string, headers map[string]string) (*probeResult, error) {
+	probeClient := *client
+	probeClient.Timeout = 15 * time.Second
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, rawURL, nil)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := client.Do(req)
-	if err != nil {
-		// fall back to GET with a tiny range
-		req2, err2 := http.NewRequestWithContext(ctx, "GET", url, nil)
-		if err2 != nil {
-			return nil, err
+	applyRequestHeaders(req, headers)
+	resp, headErr := probeClient.Do(req)
+	if headErr == nil {
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			defer resp.Body.Close()
+			return resultFromResponse(resp.Header, resp.StatusCode, responseURL(resp, rawURL)), nil
 		}
-		req2.Header.Set("Range", "bytes=0-0")
-		resp2, err2 := client.Do(req2)
-		if err2 != nil {
-			return nil, err
-		}
-		defer resp2.Body.Close()
-		return resultFromResponse(resp2.Header, resp2.StatusCode, url), nil
+		resp.Body.Close()
 	}
-	defer resp.Body.Close()
-	return resultFromResponse(resp.Header, resp.StatusCode, url), nil
+
+	// A number of file hosts reject HEAD even though GET is supported. A one-byte
+	// ranged GET both verifies access and obtains the real size from Content-Range.
+	req2, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req2.Header.Set("Range", "bytes=0-0")
+	applyRequestHeaders(req2, headers)
+	resp2, getErr := probeClient.Do(req2)
+	if getErr != nil {
+		if headErr != nil {
+			return nil, headErr
+		}
+		return nil, getErr
+	}
+	defer resp2.Body.Close()
+	if resp2.StatusCode != http.StatusOK && resp2.StatusCode != http.StatusPartialContent {
+		return nil, probeStatusError(resp2)
+	}
+	return resultFromResponse(resp2.Header, resp2.StatusCode, responseURL(resp2, rawURL)), nil
 }
 
-func resultFromResponse(h http.Header, status int, url string) *probeResult {
-	r := &probeResult{size: -1}
-	cl := h.Get("Content-Length")
-	if cl != "" {
-		fmt.Sscanf(cl, "%d", &r.size)
+func responseURL(resp *http.Response, fallback string) string {
+	if resp.Request != nil && resp.Request.URL != nil {
+		return resp.Request.URL.String()
 	}
-	r.acceptRanges = strings.Contains(strings.ToLower(h.Get("Accept-Ranges")), "bytes")
+	return fallback
+}
+
+func probeStatusError(resp *http.Response) error {
+	if strings.EqualFold(resp.Header.Get("CF-Mitigated"), "challenge") {
+		return fmt.Errorf("HTTP %d: server requires browser verification; use the ByteRush browser extension so the browser session can be handed off", resp.StatusCode)
+	}
+	return fmt.Errorf("unexpected HTTP status %d while checking download", resp.StatusCode)
+}
+
+func resultFromResponse(h http.Header, status int, rawURL string) *probeResult {
+	r := &probeResult{size: -1}
+	contentRange := h.Get("Content-Range")
+	if contentRange != "" {
+		if slash := strings.LastIndex(contentRange, "/"); slash >= 0 {
+			if size, err := strconv.ParseInt(strings.TrimSpace(contentRange[slash+1:]), 10, 64); err == nil {
+				r.size = size
+			}
+		}
+	}
+	// Content-Length on a 206 response is only the selected range length, not
+	// the whole file. Leave the total unknown if Content-Range omitted it.
+	if r.size < 0 && status != http.StatusPartialContent {
+		if size, err := strconv.ParseInt(h.Get("Content-Length"), 10, 64); err == nil {
+			r.size = size
+		}
+	}
+	r.acceptRanges = status == http.StatusPartialContent || strings.Contains(strings.ToLower(h.Get("Accept-Ranges")), "bytes")
 	if cd := h.Get("Content-Disposition"); cd != "" {
 		r.filename = filenameFromDisposition(cd)
 	}
 	if r.filename == "" {
-		if i := strings.LastIndex(strings.SplitN(url, "?", 2)[0], "/"); i >= 0 && i < len(url)-1 {
-			r.filename = url[i+1:]
+		if parsed, err := url.Parse(rawURL); err == nil {
+			r.filename = filepath.Base(strings.TrimSuffix(parsed.Path, "/"))
 		}
 	}
 	r.filename = sanitizeFilename(r.filename)
@@ -665,6 +709,32 @@ func resultFromResponse(h http.Header, status int, url string) *probeResult {
 		r.filename = "download.bin"
 	}
 	return r
+}
+
+var forwardedRequestHeaders = map[string]string{
+	"accept":          "Accept",
+	"accept-language": "Accept-Language",
+	"cookie":          "Cookie",
+	"referer":         "Referer",
+	"user-agent":      "User-Agent",
+}
+
+func sanitizeRequestHeaders(headers map[string]string) map[string]string {
+	clean := make(map[string]string)
+	for name, value := range headers {
+		canonical, ok := forwardedRequestHeaders[strings.ToLower(strings.TrimSpace(name))]
+		if !ok || strings.ContainsAny(value, "\r\n") {
+			continue
+		}
+		clean[canonical] = value
+	}
+	return clean
+}
+
+func applyRequestHeaders(req *http.Request, headers map[string]string) {
+	for name, value := range headers {
+		req.Header.Set(name, value)
+	}
 }
 
 func filenameFromDisposition(cd string) string {

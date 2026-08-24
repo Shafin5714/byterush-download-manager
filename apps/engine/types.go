@@ -40,14 +40,19 @@ type Download struct {
 	CreatedAt  time.Time      `json:"createdAt"`
 	UpdatedAt  time.Time      `json:"updatedAt"`
 
-	lastBytes int64
-	cancelled bool
+	lastBytes      int64
+	cancelled      bool
+	requestHeaders map[string]string
 }
 
 func (d *Download) clone() *Download {
 	c := *d
 	c.Segments = make([]SegmentState, len(d.Segments))
 	copy(c.Segments, d.Segments)
+	c.requestHeaders = make(map[string]string, len(d.requestHeaders))
+	for name, value := range d.requestHeaders {
+		c.requestHeaders[name] = value
+	}
 	return &c
 }
 
@@ -73,11 +78,12 @@ type Event struct {
 }
 
 type AddRequest struct {
-	URL       string `json:"url"`
-	Filename  string `json:"filename"`
-	Folder    string `json:"folder"`
-	Kind      string `json:"kind"`
-	Connections int  `json:"connections"`
+	URL            string            `json:"url"`
+	Filename       string            `json:"filename"`
+	Folder         string            `json:"folder"`
+	Kind           string            `json:"kind"`
+	Connections    int               `json:"connections"`
+	RequestHeaders map[string]string `json:"requestHeaders,omitempty"`
 }
 
 type YoutubeInfoRequest struct {

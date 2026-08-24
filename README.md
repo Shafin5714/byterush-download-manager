@@ -158,6 +158,13 @@ Download history and configuration are saved as JSON files in your user data dir
 `%APPDATA%/byterush/engine/`
 </details>
 
+<details>
+<summary><b>Why does a Cloudflare-protected download work in Chrome but not when I paste its URL?</b></summary>
+<br>
+
+Some file hosts require a browser verification session. Enable **Auto-capture browser downloads** in the ByteRush extension, complete the site's verification in Chrome, and start the download from the page. The extension passes the resolved URL and temporary browser session context to ByteRush. Chrome's download is only cancelled after the ByteRush engine has received file data; if the handoff is rejected, the normal Chrome download resumes automatically.
+</details>
+
 ---
 
 ## 🤝 Contributing
