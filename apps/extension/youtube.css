@@ -1,0 +1,278 @@
+.byterush-youtube-action {
+  display: inline-flex !important;
+  flex: none !important;
+  margin-left: 8px !important;
+  vertical-align: middle !important;
+}
+
+.byterush-youtube-button {
+  align-items: center !important;
+  background: #4f8cff !important;
+  border: 0 !important;
+  border-radius: 18px !important;
+  box-sizing: border-box !important;
+  color: #fff !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  font-family: Roboto, Arial, sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  gap: 6px !important;
+  height: 36px !important;
+  justify-content: center !important;
+  line-height: 36px !important;
+  padding: 0 14px !important;
+  white-space: nowrap !important;
+}
+
+.byterush-youtube-button:hover {
+  background: #3a74df !important;
+}
+
+.byterush-youtube-button:focus-visible {
+  outline: 2px solid #4f8cff !important;
+  outline-offset: 2px !important;
+}
+
+.byterush-youtube-button:disabled {
+  cursor: wait !important;
+  opacity: 0.65 !important;
+}
+
+html[dark] .byterush-youtube-panel,
+.byterush-youtube-panel.is-dark {
+  background: #212121 !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: #f1f1f1 !important;
+}
+
+html[dark] .byterush-youtube-panel-header,
+.byterush-youtube-panel.is-dark .byterush-youtube-panel-header {
+  border-bottom-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+html[dark] .byterush-youtube-close,
+html[dark] .byterush-youtube-field-label,
+html[dark] .byterush-youtube-loading,
+html[dark] .byterush-youtube-hint,
+.byterush-youtube-panel.is-dark .byterush-youtube-close,
+.byterush-youtube-panel.is-dark .byterush-youtube-field-label,
+.byterush-youtube-panel.is-dark .byterush-youtube-loading,
+.byterush-youtube-panel.is-dark .byterush-youtube-hint {
+  color: #aaa !important;
+}
+
+html[dark] .byterush-youtube-close:hover,
+.byterush-youtube-panel.is-dark .byterush-youtube-close:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+html[dark] .byterush-youtube-select,
+html[dark] .byterush-youtube-select option,
+.byterush-youtube-panel.is-dark .byterush-youtube-select,
+.byterush-youtube-panel.is-dark .byterush-youtube-select option {
+  background: #181818 !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #f1f1f1 !important;
+}
+
+.byterush-youtube-button svg {
+  fill: currentColor !important;
+  height: 20px !important;
+  width: 20px !important;
+}
+
+.byterush-youtube-button.is-busy svg {
+  animation: byterush-youtube-pulse 1s ease-in-out infinite !important;
+}
+
+.byterush-youtube-panel {
+  background: var(--yt-spec-menu-background, var(--yt-spec-base-background, #fff)) !important;
+  border: 1px solid var(--yt-spec-10-percent-layer, rgba(0, 0, 0, 0.12)) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28) !important;
+  box-sizing: border-box !important;
+  color: var(--yt-spec-text-primary, #0f0f0f) !important;
+  font-family: Roboto, Arial, sans-serif !important;
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+  max-height: calc(100vh - 24px) !important;
+  overflow: auto !important;
+  position: fixed !important;
+  text-align: left !important;
+  z-index: 2147483647 !important;
+}
+
+.byterush-youtube-panel *,
+.byterush-youtube-panel *::before,
+.byterush-youtube-panel *::after {
+  box-sizing: border-box !important;
+}
+
+.byterush-youtube-panel-header {
+  align-items: center !important;
+  border-bottom: 1px solid var(--yt-spec-10-percent-layer, rgba(0, 0, 0, 0.1)) !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  padding: 12px 14px !important;
+}
+
+.byterush-youtube-brand {
+  align-items: center !important;
+  display: flex !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  gap: 9px !important;
+}
+
+.byterush-youtube-logo {
+  align-items: center !important;
+  background: #4f8cff !important;
+  border-radius: 7px !important;
+  color: #fff !important;
+  display: inline-flex !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  height: 26px !important;
+  justify-content: center !important;
+  width: 26px !important;
+}
+
+.byterush-youtube-close {
+  align-items: center !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  color: var(--yt-spec-text-secondary, #606060) !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  font-size: 24px !important;
+  height: 30px !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+  padding: 0 0 2px !important;
+  width: 30px !important;
+}
+
+.byterush-youtube-close:hover {
+  background: var(--yt-spec-10-percent-layer, rgba(0, 0, 0, 0.1)) !important;
+}
+
+.byterush-youtube-panel-body {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  padding: 14px !important;
+}
+
+.byterush-youtube-video-title {
+  display: -webkit-box !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  line-height: 1.35 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  -webkit-box-orient: vertical !important;
+  -webkit-line-clamp: 2 !important;
+}
+
+.byterush-youtube-field {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+
+.byterush-youtube-field-label {
+  color: var(--yt-spec-text-secondary, #606060) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+.byterush-youtube-select {
+  appearance: auto !important;
+  background: var(--yt-spec-base-background, #fff) !important;
+  border: 1px solid var(--yt-spec-10-percent-layer, rgba(0, 0, 0, 0.2)) !important;
+  border-radius: 8px !important;
+  color: var(--yt-spec-text-primary, #0f0f0f) !important;
+  font: 400 13px Roboto, Arial, sans-serif !important;
+  height: 38px !important;
+  max-width: 100% !important;
+  outline: none !important;
+  padding: 0 10px !important;
+  width: 100% !important;
+}
+
+.byterush-youtube-select:focus {
+  border-color: #4f8cff !important;
+  box-shadow: 0 0 0 1px #4f8cff !important;
+}
+
+.byterush-youtube-select option {
+  background: var(--yt-spec-base-background, #fff) !important;
+  color: var(--yt-spec-text-primary, #0f0f0f) !important;
+}
+
+.byterush-youtube-primary {
+  background: #4f8cff !important;
+  border: 0 !important;
+  border-radius: 9px !important;
+  color: #fff !important;
+  cursor: pointer !important;
+  font: 600 14px Roboto, Arial, sans-serif !important;
+  height: 40px !important;
+  padding: 0 16px !important;
+  width: 100% !important;
+}
+
+.byterush-youtube-primary:hover:not(:disabled) {
+  background: #3a6fd8 !important;
+}
+
+.byterush-youtube-primary:disabled {
+  cursor: wait !important;
+  opacity: 0.65 !important;
+}
+
+.byterush-youtube-primary.is-success {
+  background: #168548 !important;
+}
+
+.byterush-youtube-loading {
+  align-items: center !important;
+  color: var(--yt-spec-text-secondary, #606060) !important;
+  display: flex !important;
+  gap: 10px !important;
+  min-height: 54px !important;
+}
+
+.byterush-youtube-spinner {
+  animation: byterush-youtube-spin 0.8s linear infinite !important;
+  border: 2px solid var(--yt-spec-10-percent-layer, rgba(0, 0, 0, 0.15)) !important;
+  border-radius: 50% !important;
+  border-top-color: #4f8cff !important;
+  height: 18px !important;
+  width: 18px !important;
+}
+
+.byterush-youtube-error,
+.byterush-youtube-hint {
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+  margin: 0 !important;
+}
+
+.byterush-youtube-error {
+  color: #e05252 !important;
+}
+
+.byterush-youtube-hint {
+  color: var(--yt-spec-text-secondary, #606060) !important;
+}
+
+@keyframes byterush-youtube-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes byterush-youtube-pulse {
+  50% { opacity: 0.45; }
+}

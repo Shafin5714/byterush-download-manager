@@ -113,6 +113,7 @@ The output installer `.exe` will be saved inside `apps/desktop/release/`.
 2. Toggle on **Developer mode** in the top right corner.
 3. Click **Load unpacked** and select the `apps/extension/` directory.
 4. The ByteRush extension popup will confirm connection status to the desktop app.
+5. On a YouTube watch page, use the **Download** button beside YouTube's Share action to choose a quality and send the video to ByteRush.
 
 ---
 

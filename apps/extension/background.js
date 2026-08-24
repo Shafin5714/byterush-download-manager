@@ -31,13 +31,56 @@ async function browserRequestHeaders(url, referrer) {
 
 async function sendToEngine(url, filename, referrer) {
   const requestHeaders = await browserRequestHeaders(url, referrer)
-  const res = await fetch(ENGINE + '/api/downloads', {
+  return engineRequest('/api/downloads', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url, filename: filenameOnly(filename), requestHeaders }),
   })
-  if (!res.ok) throw new Error('engine error ' + res.status)
-  return res.json()
+}
+
+async function engineRequest(path, options) {
+  const res = await fetch(ENGINE + path, options)
+  let data
+  try {
+    data = await res.json()
+  } catch {
+    data = null
+  }
+  if (!res.ok) throw new Error(data?.error || `ByteRush returned HTTP ${res.status}`)
+  return data
+}
+
+function youtubeWatchUrl(value) {
+  try {
+    const url = new URL(value)
+    const host = url.hostname.toLowerCase()
+    if (url.protocol !== 'https:' || (host !== 'youtube.com' && host !== 'www.youtube.com')) return null
+    const videoId = url.pathname === '/watch' ? url.searchParams.get('v') : ''
+    if (!videoId || !/^[\w-]{6,20}$/.test(videoId)) return null
+    return `https://www.youtube.com/watch?v=${videoId}`
+  } catch {
+    return null
+  }
+}
+
+async function youtubeInfo(url) {
+  return engineRequest('/api/youtube/info', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  })
+}
+
+async function youtubeDownload(url, format, container) {
+  return engineRequest('/api/youtube/download', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      url,
+      format: typeof format === 'string' && format.length <= 200 ? format : 'bestvideo*+bestaudio/best',
+      container: container === 'mp4' ? 'mp4' : 'auto',
+    }),
+  })
 }
 
 async function removeEngineDownload(id) {
@@ -72,6 +115,28 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     sendToEngine(msg.url, msg.filename)
       .then(() => sendResponse({ ok: true }))
       .catch((e) => sendResponse({ ok: false, error: String(e) }))
+    return true
+  }
+  if (msg && msg.type === 'youtube-info') {
+    const url = youtubeWatchUrl(msg.url)
+    if (!url) {
+      sendResponse({ ok: false, error: 'Open a YouTube video before downloading.' })
+      return false
+    }
+    youtubeInfo(url)
+      .then((info) => sendResponse({ ok: true, info }))
+      .catch((e) => sendResponse({ ok: false, error: String(e instanceof Error ? e.message : e) }))
+    return true
+  }
+  if (msg && msg.type === 'youtube-download') {
+    const url = youtubeWatchUrl(msg.url)
+    if (!url) {
+      sendResponse({ ok: false, error: 'Open a YouTube video before downloading.' })
+      return false
+    }
+    youtubeDownload(url, msg.format, msg.container)
+      .then((download) => sendResponse({ ok: true, download }))
+      .catch((e) => sendResponse({ ok: false, error: String(e instanceof Error ? e.message : e) }))
     return true
   }
   return false
