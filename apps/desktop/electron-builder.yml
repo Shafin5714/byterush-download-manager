@@ -6,6 +6,8 @@ directories:
 files:
   - out/**
   - dist/**
+  - resources/icon-16.png
+  - resources/icon-256.png
   - package.json
 extraResources:
   - from: resources/engine.exe

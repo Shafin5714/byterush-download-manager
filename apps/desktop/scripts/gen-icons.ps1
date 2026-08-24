@@ -1,44 +1,48 @@
 Add-Type -AssemblyName System.Drawing
 
-function New-Icon($size, $outPath) {
-  $bmp = New-Object System.Drawing.Bitmap($size, $size)
-  $g = [System.Drawing.Graphics]::FromImage($bmp)
-  $g.SmoothingMode = 'AntiAlias'
-  $rect = New-Object System.Drawing.Rectangle(0, 0, $size, $size)
-  $c1 = [System.Drawing.Color]::FromArgb(255, 79, 140, 255)
-  $c2 = [System.Drawing.Color]::FromArgb(255, 58, 111, 216)
-  $brush = New-Object System.Drawing.Drawing2D.LinearGradientBrush($rect, $c1, $c2, 45)
-  $round = [System.Drawing.Drawing2D.GraphicsPath]::new()
-  $r = [int]($size * 0.22)
-  $round.AddArc(0, 0, $r, $r, 180, 90)
-  $round.AddArc($size - $r, 0, $r, $r, 270, 90)
-  $round.AddArc($size - $r, $size - $r, $r, $r, 0, 90)
-  $round.AddArc(0, $size - $r, $r, $r, 90, 90)
-  $round.CloseFigure()
-  $g.FillPath($brush, $round)
-
-  $white = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
-  $stem = New-Object System.Drawing.Rectangle(
-    [int]($size * 0.47), [int]($size * 0.20), [int]($size * 0.06), [int]($size * 0.36))
-  $g.FillRectangle($white, $stem)
-  $tip = @(
-    (New-Object System.Drawing.PointF([float]($size * 0.5), [float]($size * 0.70))),
-    (New-Object System.Drawing.PointF([float]($size * 0.30), [float]($size * 0.52))),
-    (New-Object System.Drawing.PointF([float]($size * 0.70), [float]($size * 0.52)))
-  )
-  $g.FillPolygon($white, $tip)
-  $g.Dispose()
-  $bmp.Save($outPath, [System.Drawing.Imaging.ImageFormat]::Png)
-  $bmp.Dispose()
-}
-
 $desktop = Join-Path $PSScriptRoot "..\resources"
-$ext = Join-Path $PSScriptRoot "..\..\extension\icons"
-New-Item -ItemType Directory -Path $desktop -Force | Out-Null
-New-Item -ItemType Directory -Path $ext -Force | Out-Null
+$extension = Join-Path $PSScriptRoot "..\..\extension\icons"
+$masterPath = Join-Path $desktop "icon-v2-transparent.png"
 
-foreach ($s in @(16, 32, 48, 128, 256)) {
-  New-Icon $s (Join-Path $desktop "icon-$s.png")
-  if ($s -ne 256) { New-Icon $s (Join-Path $ext "icon-$s.png") }
+if (-not (Test-Path -LiteralPath $masterPath)) {
+  throw "Icon master not found: $masterPath"
 }
-Write-Output "icons generated"
+
+New-Item -ItemType Directory -Path $desktop -Force | Out-Null
+New-Item -ItemType Directory -Path $extension -Force | Out-Null
+
+function Export-IconSize($source, $size, $outPath) {
+  $bitmap = New-Object System.Drawing.Bitmap(
+    $size,
+    $size,
+    [System.Drawing.Imaging.PixelFormat]::Format32bppArgb
+  )
+  $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+  try {
+    $graphics.Clear([System.Drawing.Color]::Transparent)
+    $graphics.CompositingMode = [System.Drawing.Drawing2D.CompositingMode]::SourceCopy
+    $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+    $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+    $graphics.DrawImage($source, 0, 0, $size, $size)
+    $bitmap.Save($outPath, [System.Drawing.Imaging.ImageFormat]::Png)
+  } finally {
+    $graphics.Dispose()
+    $bitmap.Dispose()
+  }
+}
+
+$master = [System.Drawing.Image]::FromFile($masterPath)
+try {
+  foreach ($size in @(16, 32, 48, 128, 256)) {
+    Export-IconSize $master $size (Join-Path $desktop "icon-$size.png")
+    if ($size -ne 256) {
+      Export-IconSize $master $size (Join-Path $extension "icon-$size.png")
+    }
+  }
+} finally {
+  $master.Dispose()
+}
+
+Write-Output "ByteRush icons generated from $masterPath"

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Settings } from '../../shared/types'
 import { api } from '../api'
 import { store } from '../store'
+import Icon from './Icon'
 
 interface Props {
   onClose: () => void
@@ -46,54 +47,38 @@ export default function SettingsModal({ onClose }: Props) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-sm" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Settings</h3>
-          <button className="btn btn-icon" onClick={onClose}>
-            ✕
+          <div className="modal-title">
+            <div className="modal-title-icon"><Icon name="settings" size={19} /></div>
+            <div><h3>Settings</h3><p>Control download performance and storage.</p></div>
+          </div>
+          <button className="icon-button modal-close" onClick={onClose} aria-label="Close settings">
+            <Icon name="x" size={18} />
           </button>
         </div>
         <div className="modal-body">
-          <label className="field-label">Default download folder</label>
-          <div className="url-row">
-            <input className="input" value={form.downloadDir} onChange={(e) => set({ downloadDir: e.target.value })} />
-            <button className="btn" onClick={browse}>
-              Browse…
-            </button>
+          <div className="settings-section">
+            <div className="setting-heading"><Icon name="folder" size={18} /><span><strong>Download location</strong><small>Choose where completed files are saved.</small></span></div>
+            <div className="url-row">
+              <input className="input" value={form.downloadDir} onChange={(e) => set({ downloadDir: e.target.value })} />
+              <button className="btn btn-secondary" onClick={browse}><Icon name="folder" size={16} />Browse</button>
+            </div>
           </div>
 
-          <label className="field-label">
-            Concurrent downloads <span className="hint-inline">({form.maxActive})</span>
-          </label>
-          <input
-            type="range"
-            min={1}
-            max={10}
-            value={form.maxActive}
-            onChange={(e) => set({ maxActive: Number(e.target.value) })}
-          />
-
-          <label className="field-label">
-            Connections per file <span className="hint-inline">({form.connections})</span>
-          </label>
-          <input
-            type="range"
-            min={1}
-            max={32}
-            value={form.connections}
-            onChange={(e) => set({ connections: Number(e.target.value) })}
-          />
-
-          <label className="field-label">
-            Global speed limit <span className="hint-inline">{form.speedLimitKBs > 0 ? `${form.speedLimitKBs} KB/s` : 'Unlimited'}</span>
-          </label>
-          <input
-            type="range"
-            min={0}
-            max={10000}
-            step={100}
-            value={form.speedLimitKBs}
-            onChange={(e) => set({ speedLimitKBs: Number(e.target.value) })}
-          />
-          <p className="hint">0 = unlimited.</p>
+          <div className="settings-section performance-settings">
+            <div className="setting-heading"><Icon name="activity" size={18} /><span><strong>Performance</strong><small>Balance speed with network and disk usage.</small></span></div>
+            <label className="range-setting">
+              <span><strong>Concurrent downloads</strong><output>{form.maxActive}</output></span>
+              <input type="range" min={1} max={10} value={form.maxActive} onChange={(e) => set({ maxActive: Number(e.target.value) })} />
+            </label>
+            <label className="range-setting">
+              <span><strong>Connections per file</strong><output>{form.connections}</output></span>
+              <input type="range" min={1} max={32} value={form.connections} onChange={(e) => set({ connections: Number(e.target.value) })} />
+            </label>
+            <label className="range-setting">
+              <span><strong>Global speed limit</strong><output>{form.speedLimitKBs > 0 ? `${form.speedLimitKBs} KB/s` : 'Unlimited'}</output></span>
+              <input type="range" min={0} max={10000} step={100} value={form.speedLimitKBs} onChange={(e) => set({ speedLimitKBs: Number(e.target.value) })} />
+            </label>
+          </div>
 
           {error && <p className="error-text">{error}</p>}
           {saved && <p className="ok-text">Settings saved.</p>}
@@ -103,7 +88,7 @@ export default function SettingsModal({ onClose }: Props) {
             Cancel
           </button>
           <button className="btn btn-primary" onClick={save} disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? 'Saving...' : 'Save changes'}
           </button>
         </div>
       </div>

@@ -3,6 +3,7 @@ import type { YoutubeInfo } from '../../shared/types'
 import { api } from '../api'
 import { store } from '../store'
 import { formatBytes, formatDuration, isYouTubeUrl } from '../utils'
+import Icon from './Icon'
 
 interface Props {
   onClose: () => void
@@ -117,13 +118,16 @@ export default function AddModal({ onClose }: Props) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>New Download</h3>
-          <button className="btn btn-icon" onClick={onClose}>
-            ✕
+          <div className="modal-title">
+            <div className="modal-title-icon"><Icon name="download" size={19} /></div>
+            <div><h3>New download</h3><p>Add a direct file link or supported video URL.</p></div>
+          </div>
+          <button className="icon-button modal-close" onClick={onClose} aria-label="Close new download dialog">
+            <Icon name="x" size={18} />
           </button>
         </div>
         <div className="modal-body">
-          <label className="field-label">URL</label>
+          <label className="field-label">Download URL</label>
           <div className="url-row">
             <input
               className="input"
@@ -136,10 +140,10 @@ export default function AddModal({ onClose }: Props) {
               }}
               autoFocus
             />
-            <button className="btn" onClick={pasteFromClipboard} title="Paste from clipboard">
-              📋
+            <button className="btn btn-secondary" onClick={pasteFromClipboard} title="Paste from clipboard">
+              <Icon name="clipboard" size={16} />Paste
             </button>
-            {isYt && <button className="btn" onClick={analyze}>Analyze</button>}
+            {isYt && <button className="btn btn-secondary" onClick={analyze}>Analyze</button>}
           </div>
           {isYt && !ytInfo && mode !== 'loading' && mode !== 'error' && (
             <p className="hint">YouTube link detected — analyzing formats…</p>
@@ -148,7 +152,7 @@ export default function AddModal({ onClose }: Props) {
           {mode === 'error' && (
             <div className="yt-error">
               <p className="error-text">{ytError}</p>
-              <button className="btn" onClick={analyze}>
+              <button className="btn btn-secondary" onClick={analyze}>
                 Retry analysis
               </button>
             </div>
@@ -256,17 +260,11 @@ export default function AddModal({ onClose }: Props) {
             </>
           )}
 
-          {(mode === 'youtube' || true) && (
-            <>
-              <label className="field-label">Save to</label>
-              <div className="url-row">
-                <input className="input" value={folder} onChange={(e) => setFolder(e.target.value)} />
-                <button className="btn" onClick={browseFolder}>
-                  Browse…
-                </button>
-              </div>
-            </>
-          )}
+          <label className="field-label">Save to</label>
+          <div className="url-row">
+            <input className="input" value={folder} onChange={(e) => setFolder(e.target.value)} />
+            <button className="btn btn-secondary" onClick={browseFolder}><Icon name="folder" size={16} />Browse</button>
+          </div>
 
           {mode === 'youtube' && ytInfo?.isPlaylist && (
             <>
@@ -284,7 +282,7 @@ export default function AddModal({ onClose }: Props) {
           {error && <p className="error-text">{error}</p>}
         </div>
         <div className="modal-footer">
-          <button className="btn" onClick={onClose}>
+          <button className="btn btn-secondary" onClick={onClose}>
             Cancel
           </button>
           <button
@@ -297,10 +295,11 @@ export default function AddModal({ onClose }: Props) {
               (mode === 'youtube' && ytInfo?.isPlaylist && selectedEntries.size === 0)
             }
           >
+            {!submitting && mode !== 'loading' && <Icon name="download" size={16} />}
             {submitting
-              ? 'Adding…'
+              ? 'Adding...'
               : isYt && mode === 'loading'
-                ? 'Analyzing…'
+                ? 'Analyzing...'
                 : mode === 'youtube'
                   ? 'Download'
                   : 'Start Download'}

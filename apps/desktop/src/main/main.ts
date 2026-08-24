@@ -101,6 +101,7 @@ function createWindow() {
     minHeight: 560,
     backgroundColor: '#0f1115',
     title: 'ByteRush',
+    icon: path.join(app.getAppPath(), 'resources', 'icon-256.png'),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
@@ -122,8 +123,23 @@ function createWindow() {
       const html = await win!.webContents.executeJavaScript(
         'document.getElementById("root").innerHTML.length + "|" + document.title + "|" + document.querySelectorAll("div").length',
       )
+      const screenshotPath = process.env.BYTERUSH_SMOKE_SCREENSHOT
+      if (screenshotPath) {
+        await new Promise((resolve) => setTimeout(resolve, 500))
+        const action = process.env.BYTERUSH_SMOKE_ACTION
+        if (action === 'add') {
+          await win!.webContents.executeJavaScript('document.querySelector(".add-button")?.click()')
+        } else if (action === 'settings') {
+          await win!.webContents.executeJavaScript('document.querySelector(".sidebar-footer .nav-item")?.click()')
+        }
+        await new Promise((resolve) => setTimeout(resolve, 300))
+        const image = await win!.webContents.capturePage()
+        fs.writeFileSync(screenshotPath, image.toPNG())
+        console.log('SMOKE_SCREENSHOT', screenshotPath)
+      }
       console.log('SMOKE_OK', html)
-      app.exit(0)
+      app.quit()
+      setTimeout(() => process.exit(0), 800)
     })
     win.webContents.on('did-fail-load', (_e, code, desc) => {
       console.error('SMOKE_FAIL', code, desc)
