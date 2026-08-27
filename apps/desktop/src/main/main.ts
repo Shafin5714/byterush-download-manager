@@ -22,11 +22,15 @@ if (!gotLock) {
   app.quit()
 } else {
   app.on('second-instance', () => {
-    if (win) {
-      if (win.isMinimized()) win.restore()
-      win.focus()
-    }
+    showMainWindow()
   })
+}
+
+function showMainWindow() {
+  if (!win) return
+  if (win.isMinimized()) win.restore()
+  if (!win.isVisible()) win.show()
+  win.focus()
 }
 
 function enginePath(): string {
@@ -167,10 +171,7 @@ function createTray() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Open ByteRush', click: () => {
-        if (win) {
-          win.show()
-          win.focus()
-        }
+        showMainWindow()
       } },
       { type: 'separator' },
       { label: 'Pause All', click: () => enginePost('/api/downloads/pause-all') },
@@ -183,6 +184,7 @@ function createTray() {
 
 function registerIpc() {
   ipcMain.handle('byterush:config', () => ({ port: enginePort, version: app.getVersion() }))
+  ipcMain.handle('byterush:show-window', () => showMainWindow())
   ipcMain.handle('byterush:choose-directory', async () => {
     const res = await dialog.showOpenDialog(win!, { properties: ['openDirectory', 'createDirectory'] })
     return res.canceled || res.filePaths.length === 0 ? null : res.filePaths[0]

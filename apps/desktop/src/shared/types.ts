@@ -70,6 +70,7 @@ declare global {
   interface Window {
     byterush: {
       getConfig(): Promise<{ port: number; version: string }>
+      showWindow(): Promise<void>
       chooseDirectory(): Promise<string | null>
       revealFile(p: string): Promise<void>
       notify(title: string, body: string): Promise<void>

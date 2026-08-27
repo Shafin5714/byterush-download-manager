@@ -30,7 +30,7 @@ export function isYouTubeUrl(url: string): boolean {
 
 export function percent(d: { downloaded: number; totalSize: number }): number {
   if (d.totalSize > 0) return Math.min(100, (d.downloaded / d.totalSize) * 100)
-  return d.downloaded > 0 ? 100 : 0
+  return 0
 }
 
 export function formatDuration(sec?: number): string {

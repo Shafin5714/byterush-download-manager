@@ -71,7 +71,7 @@ function DownloadRow({ d }: { d: Download }) {
         <div className="progress-track" aria-label={`${pct.toFixed(1)}% downloaded`}>
           <div
             className={`progress-value ${d.status} ${isIndeterminate ? 'indeterminate' : ''}`}
-            style={{ width: `${isIndeterminate ? 100 : d.status === 'completed' ? 100 : pct}%` }}
+            style={{ width: `${isIndeterminate ? 28 : d.status === 'completed' ? 100 : pct}%` }}
           />
         </div>
 

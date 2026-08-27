@@ -35,6 +35,9 @@ export async function initStore(): Promise<void> {
       mutate((s) => {
         s.downloads[d.id] = d
       })
+      if (e.type === 'added') {
+        void window.byterush.showWindow()
+      }
       if (e.type === 'update' && d.status === 'completed' && !completedNotified.has(d.id)) {
         completedNotified.add(d.id)
         window.byterush.notify('Download complete', d.filename)
