@@ -21,15 +21,13 @@ type App struct {
 	version   string
 	port      int
 
-	settings *Settings
-	store    *Store
-	hub      *Hub
-	dl       *DownloadManager
-	yt       *YoutubeManager
-	limiter  *Limiter
+	settings  *Settings
+	store     *Store
+	hub       *Hub
+	dl        *DownloadManager
+	yt        *YoutubeManager
+	limiter   *Limiter
 	transport *http.Transport
-
-	youtubeReq *YoutubeDownloadRequest
 
 	server *http.Server
 	done   chan struct{}
@@ -67,12 +65,6 @@ func NewApp(dir, ytdlpPath string) *App {
 	a.yt = NewYoutubeManager(a)
 	a.dl = NewDownloadManager(a)
 	return a
-}
-
-func (a *App) setReq(req YoutubeDownloadRequest) {
-	a.mu.Lock()
-	a.youtubeReq = &req
-	a.mu.Unlock()
 }
 
 func (a *App) Start(port int) (int, error) {

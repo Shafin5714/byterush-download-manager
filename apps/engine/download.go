@@ -103,6 +103,38 @@ func (m *DownloadManager) broadcast(d *Download) {
 	m.app.hub.Broadcast(Event{Type: "update", Data: d.clone()})
 }
 
+func (m *DownloadManager) updateYoutubeProgress(d *Download, down, total, speed int64) {
+	m.mu.Lock()
+	d.Downloaded = down
+	d.TotalSize = total
+	d.Speed = speed
+	if speed > 0 && total > down {
+		d.ETA = (total - down) / speed
+	} else {
+		d.ETA = 0
+	}
+	d.UpdatedAt = time.Now()
+	update := d.clone()
+	m.mu.Unlock()
+	m.app.hub.Broadcast(Event{Type: "update", Data: update})
+}
+
+func (m *DownloadManager) setYoutubeOutput(d *Download, final string) {
+	finalSize := d.Downloaded
+	if info, err := os.Stat(final); err == nil {
+		finalSize = info.Size()
+	}
+	m.mu.Lock()
+	d.FinalFile = final
+	d.Filename = filepath.Base(final)
+	d.Downloaded = finalSize
+	d.TotalSize = finalSize
+	d.UpdatedAt = time.Now()
+	update := d.clone()
+	m.mu.Unlock()
+	m.app.hub.Broadcast(Event{Type: "update", Data: update})
+}
+
 func (m *DownloadManager) Add(req AddRequest) (*Download, error) {
 	if req.Folder == "" {
 		req.Folder = m.app.settings.DownloadDir
@@ -123,6 +155,10 @@ func (m *DownloadManager) Add(req AddRequest) (*Download, error) {
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 		requestHeaders: sanitizeRequestHeaders(req.RequestHeaders),
+	}
+	if req.Youtube != nil {
+		youtubeReq := *req.Youtube
+		d.Youtube = &youtubeReq
 	}
 	m.mu.Lock()
 	m.downloads[d.ID] = d
@@ -175,6 +211,17 @@ func (m *DownloadManager) Pause(id string) error {
 		if c, ok := m.cancels[id]; ok {
 			c()
 		}
+		m.mu.Unlock()
+		return nil
+	}
+	if d.Status == StatusQueued {
+		d.Status = StatusPaused
+		d.UpdatedAt = time.Now()
+		m.pending = removeString(m.pending, id)
+		m.mu.Unlock()
+		m.markDirty()
+		m.broadcast(d)
+		return nil
 	}
 	m.mu.Unlock()
 	return nil
@@ -243,18 +290,15 @@ func (m *DownloadManager) kick() {
 		d.Status = StatusActive
 		d.UpdatedAt = time.Now()
 		m.activeCnt++
-		go m.run(d)
+		ctx, cancel := context.WithCancel(context.Background())
+		m.cancels[d.ID] = cancel
+		go m.run(ctx, cancel, d)
 		m.broadcast(d)
 	}
 	m.mu.Unlock()
 }
 
-func (m *DownloadManager) run(d *Download) {
-	ctx, cancel := context.WithCancel(context.Background())
-	m.mu.Lock()
-	m.cancels[d.ID] = cancel
-	m.mu.Unlock()
-
+func (m *DownloadManager) run(ctx context.Context, cancel context.CancelFunc, d *Download) {
 	finish := func(st Status, errMsg string) {
 		cancel()
 		m.mu.Lock()

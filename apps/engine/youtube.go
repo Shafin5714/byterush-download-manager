@@ -26,7 +26,6 @@ type YoutubeManager struct {
 	deno        string
 	denoChecked bool
 	ffmpeg      string
-	reqs        map[string]YoutubeDownloadRequest
 }
 
 const (
@@ -40,10 +39,7 @@ var (
 )
 
 func NewYoutubeManager(app *App) *YoutubeManager {
-	return &YoutubeManager{
-		app:  app,
-		reqs: make(map[string]YoutubeDownloadRequest),
-	}
+	return &YoutubeManager{app: app}
 }
 
 func (y *YoutubeManager) ensureBinary() (string, error) {
@@ -391,25 +387,6 @@ type rawInfo struct {
 	} `json:"entries"`
 }
 
-func (y *YoutubeManager) setReq(id string, req YoutubeDownloadRequest) {
-	y.mu.Lock()
-	y.reqs[id] = req
-	y.mu.Unlock()
-}
-
-func (y *YoutubeManager) getReq(id string) (YoutubeDownloadRequest, bool) {
-	y.mu.Lock()
-	defer y.mu.Unlock()
-	req, ok := y.reqs[id]
-	return req, ok
-}
-
-func (y *YoutubeManager) deleteReq(id string) {
-	y.mu.Lock()
-	delete(y.reqs, id)
-	y.mu.Unlock()
-}
-
 func (y *YoutubeManager) Info(url string) (*YoutubeInfo, error) {
 	exe, err := y.ensureBinary()
 	if err != nil {
@@ -537,11 +514,16 @@ func (y *YoutubeManager) Run(ctx context.Context, d *Download) error {
 	if err != nil {
 		return err
 	}
-	req, ok := y.getReq(d.ID)
-	if !ok {
-		return fmt.Errorf("missing youtube request for download %s", d.ID)
+	req := YoutubeDownloadRequest{URL: d.URL, Folder: d.Folder}
+	if d.Youtube != nil {
+		req = *d.Youtube
+		if req.URL == "" {
+			req.URL = d.URL
+		}
+		if req.Folder == "" {
+			req.Folder = d.Folder
+		}
 	}
-	defer y.deleteReq(d.ID)
 
 	ffmpeg := ""
 	if p, err := y.ensureFFmpeg(); err == nil {
@@ -560,7 +542,7 @@ func (y *YoutubeManager) Run(ctx context.Context, d *Download) error {
 		}
 	}
 
-	args := append(y.youtubeRuntimeArgs(), "--newline", "--progress", "--no-warnings")
+	args := append(y.youtubeRuntimeArgs(), "--newline", "--progress", "--no-warnings", "--no-colors")
 	if req.Format != "" && req.Format != "best" {
 		args = append(args, "-f", req.Format)
 	}
@@ -599,10 +581,7 @@ func (y *YoutubeManager) Run(ctx context.Context, d *Download) error {
 	if final == "" {
 		return fmt.Errorf("could not determine output file")
 	}
-	d.FinalFile = final
-	d.Filename = filepath.Base(final)
-	d.TotalSize = d.Downloaded
-	y.app.hub.Broadcast(Event{Type: "update", Data: d.clone()})
+	y.app.dl.setYoutubeOutput(d, final)
 	return nil
 }
 
@@ -622,17 +601,15 @@ func (y *YoutubeManager) run(ctx context.Context, exe string, args []string, d *
 
 	var final string
 	var outputMu sync.Mutex
+	var pipeWG sync.WaitGroup
+	pipeWG.Add(2)
 	go func() {
+		defer pipeWG.Done()
 		scanner := bufio.NewScanner(stdout)
 		scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 		for scanner.Scan() {
 			line := scanner.Text()
-			if m := ytProgressRe.FindStringSubmatch(line); m != nil {
-				pct, _ := strconv.ParseFloat(m[1], 64)
-				total := parseSize(m[2], m[3])
-				speed := parseSize(m[4], m[5])
-				y.updateProgress(d, int64(pct/100.0*float64(total)), total, speed)
-			} else if !strings.HasPrefix(line, "[") {
+			if !y.parseProgress(d, line) && !strings.HasPrefix(line, "[") {
 				// --print after_move:filepath emits the raw path
 				outputMu.Lock()
 				final = strings.TrimSpace(line)
@@ -642,10 +619,23 @@ func (y *YoutubeManager) run(ctx context.Context, exe string, args []string, d *
 	}()
 	var errBuf strings.Builder
 	go func() {
-		io.Copy(&errBuf, stderr)
+		defer pipeWG.Done()
+		scanner := bufio.NewScanner(stderr)
+		scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if y.parseProgress(d, line) {
+				continue
+			}
+			if errBuf.Len() > 0 {
+				errBuf.WriteByte('\n')
+			}
+			errBuf.WriteString(line)
+		}
 	}()
 
 	err = cmd.Wait()
+	pipeWG.Wait()
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
@@ -658,11 +648,23 @@ func (y *YoutubeManager) run(ctx context.Context, exe string, args []string, d *
 	return final, nil
 }
 
+func (y *YoutubeManager) parseProgress(d *Download, line string) bool {
+	m := ytProgressRe.FindStringSubmatch(line)
+	if m == nil {
+		return false
+	}
+	pct, _ := strconv.ParseFloat(m[1], 64)
+	total := parseSize(m[2], m[3])
+	speed := parseSize(m[4], m[5])
+	y.app.dl.updateYoutubeProgress(d, int64(pct/100.0*float64(total)), total, speed)
+	return true
+}
+
 func isHTTP403(err error) bool {
 	return err != nil && strings.Contains(strings.ToLower(err.Error()), "http error 403")
 }
 
-var ytProgressRe = regexp.MustCompile(`\[download\]\s+([\d.]+)%\s+of\s+~?\s*([\d.]+)\s*([KMG])?i?B(?:\s+at\s+([\d.]+)\s*([KMG])?i?B/s)?`)
+var ytProgressRe = regexp.MustCompile(`\[download\]\s+([\d.]+)%\s+of\s+~?\s*([\d.]+)\s*([KMGTPE])?i?B(?:\s+at\s+([\d.]+)\s*([KMGTPE])?i?B/s)?`)
 
 func parseSize(v, unit string) int64 {
 	if v == "" {
@@ -677,20 +679,12 @@ func parseSize(v, unit string) int64 {
 		mult = 1024 * 1024
 	case "G":
 		mult = 1024 * 1024 * 1024
+	case "T":
+		mult = 1024 * 1024 * 1024 * 1024
+	case "P":
+		mult = 1024 * 1024 * 1024 * 1024 * 1024
+	case "E":
+		mult = 1024 * 1024 * 1024 * 1024 * 1024 * 1024
 	}
 	return int64(n * mult)
-}
-
-func (y *YoutubeManager) updateProgress(d *Download, down, total int64, speed int64) {
-	y.mu.Lock()
-	d.Downloaded = down
-	d.TotalSize = total
-	d.Speed = speed
-	if d.Speed > 0 && total > down {
-		d.ETA = (total - down) / d.Speed
-	} else {
-		d.ETA = 0
-	}
-	y.mu.Unlock()
-	y.app.hub.Broadcast(Event{Type: "update", Data: d.clone()})
 }

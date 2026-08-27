@@ -23,22 +23,23 @@ type SegmentState struct {
 }
 
 type Download struct {
-	ID         string         `json:"id"`
-	URL        string         `json:"url"`
-	Filename   string         `json:"filename"`
-	TempFile   string         `json:"tempFile"`
-	FinalFile  string         `json:"finalFile"`
-	Folder     string         `json:"folder"`
-	Kind       string         `json:"kind"`
-	TotalSize  int64          `json:"totalSize"`
-	Downloaded int64          `json:"downloaded"`
-	Speed      int64          `json:"speed"`
-	ETA        int64          `json:"eta"`
-	Status     Status         `json:"status"`
-	Segments   []SegmentState `json:"segments"`
-	Error      string         `json:"error,omitempty"`
-	CreatedAt  time.Time      `json:"createdAt"`
-	UpdatedAt  time.Time      `json:"updatedAt"`
+	ID         string                  `json:"id"`
+	URL        string                  `json:"url"`
+	Filename   string                  `json:"filename"`
+	TempFile   string                  `json:"tempFile"`
+	FinalFile  string                  `json:"finalFile"`
+	Folder     string                  `json:"folder"`
+	Kind       string                  `json:"kind"`
+	TotalSize  int64                   `json:"totalSize"`
+	Downloaded int64                   `json:"downloaded"`
+	Speed      int64                   `json:"speed"`
+	ETA        int64                   `json:"eta"`
+	Status     Status                  `json:"status"`
+	Segments   []SegmentState          `json:"segments"`
+	Error      string                  `json:"error,omitempty"`
+	CreatedAt  time.Time               `json:"createdAt"`
+	UpdatedAt  time.Time               `json:"updatedAt"`
+	Youtube    *YoutubeDownloadRequest `json:"youtube,omitempty"`
 
 	lastBytes      int64
 	cancelled      bool
@@ -47,6 +48,10 @@ type Download struct {
 
 func (d *Download) clone() *Download {
 	c := *d
+	if d.Youtube != nil {
+		req := *d.Youtube
+		c.Youtube = &req
+	}
 	c.Segments = make([]SegmentState, len(d.Segments))
 	copy(c.Segments, d.Segments)
 	c.requestHeaders = make(map[string]string, len(d.requestHeaders))
@@ -78,12 +83,13 @@ type Event struct {
 }
 
 type AddRequest struct {
-	URL            string            `json:"url"`
-	Filename       string            `json:"filename"`
-	Folder         string            `json:"folder"`
-	Kind           string            `json:"kind"`
-	Connections    int               `json:"connections"`
-	RequestHeaders map[string]string `json:"requestHeaders,omitempty"`
+	URL            string                  `json:"url"`
+	Filename       string                  `json:"filename"`
+	Folder         string                  `json:"folder"`
+	Kind           string                  `json:"kind"`
+	Connections    int                     `json:"connections"`
+	RequestHeaders map[string]string       `json:"requestHeaders,omitempty"`
+	Youtube        *YoutubeDownloadRequest `json:"-"`
 }
 
 type YoutubeInfoRequest struct {

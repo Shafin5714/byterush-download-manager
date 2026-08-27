@@ -198,12 +198,12 @@ func (a *App) handleYoutubeDownload(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	d, err := a.dl.Add(AddRequest{URL: req.URL, Folder: folder, Kind: "youtube"})
+	req.Folder = folder
+	d, err := a.dl.Add(AddRequest{URL: req.URL, Folder: folder, Kind: "youtube", Youtube: &req})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	a.yt.setReq(d.ID, req)
 	writeJSON(w, http.StatusAccepted, d)
 }
 
