@@ -1,8 +1,10 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -10,7 +12,97 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestDownloadDenoExtractsExecutable(t *testing.T) {
+	var archive bytes.Buffer
+	zw := zip.NewWriter(&archive)
+	f, err := zw.Create("deno.exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Write([]byte("fake deno executable")); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/zip")
+		_, _ = w.Write(archive.Bytes())
+	}))
+	defer server.Close()
+	oldURL := denoDownloadURL
+	denoDownloadURL = server.URL
+	defer func() { denoDownloadURL = oldURL }()
+
+	dataDir := t.TempDir()
+	app := NewApp(dataDir, "")
+	dest := filepath.Join(dataDir, "deno.exe")
+	if err := app.yt.downloadDeno(dest); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "fake deno executable" {
+		t.Fatalf("unexpected extracted contents: %q", got)
+	}
+}
+
+func TestYoutubeRuntimeArgsUseManagedDeno(t *testing.T) {
+	dataDir := t.TempDir()
+	deno := filepath.Join(dataDir, "deno.exe")
+	if err := os.WriteFile(deno, []byte("fake"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	app := NewApp(dataDir, "")
+	args := app.yt.youtubeRuntimeArgs()
+	if len(args) != 2 || args[0] != "--js-runtimes" || args[1] != "deno:"+deno {
+		t.Fatalf("unexpected runtime args: %#v", args)
+	}
+}
+
+func TestIsHTTP403(t *testing.T) {
+	if !isHTTP403(errors.New("unable to download video data: HTTP Error 403: Forbidden")) {
+		t.Fatal("expected HTTP 403 error to be recognized")
+	}
+	if isHTTP403(errors.New("HTTP Error 429: Too Many Requests")) {
+		t.Fatal("did not expect a non-403 error to be recognized")
+	}
+}
+
+func TestYtDLPUpdateDueRetriesFailuresSooner(t *testing.T) {
+	stamp := filepath.Join(t.TempDir(), "yt-dlp-update-check")
+	if err := os.WriteFile(stamp, []byte("failed"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	if err := os.Chtimes(stamp, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if ytDLPUpdateDue(stamp, now) {
+		t.Fatal("a recent failed check should be briefly throttled")
+	}
+	if !ytDLPUpdateDue(stamp, now.Add(ytDLPUpdateFailureInterval)) {
+		t.Fatal("a failed check should be retried after the short failure interval")
+	}
+	if err := os.WriteFile(stamp, []byte("ok"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(stamp, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if ytDLPUpdateDue(stamp, now.Add(time.Hour)) {
+		t.Fatal("a successful check should use the full update interval")
+	}
+	if !ytDLPUpdateDue(stamp, now.Add(ytDLPUpdateInterval)) {
+		t.Fatal("a successful check should be retried after the full update interval")
+	}
+}
 
 func TestProbeFallsBackToRangedGET(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -19,13 +19,25 @@ import (
 )
 
 type YoutubeManager struct {
-	app        *App
-	mu         sync.Mutex
-	binary     string
-	ffmpeg     string
-	lastOutput string
-	reqs       map[string]YoutubeDownloadRequest
+	app         *App
+	mu          sync.Mutex
+	setupMu     sync.Mutex
+	binary      string
+	deno        string
+	denoChecked bool
+	ffmpeg      string
+	reqs        map[string]YoutubeDownloadRequest
 }
+
+const (
+	ytDLPUpdateInterval        = 24 * time.Hour
+	ytDLPUpdateFailureInterval = 5 * time.Minute
+)
+
+var (
+	ytDLPDownloadURL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
+	denoDownloadURL  = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip"
+)
 
 func NewYoutubeManager(app *App) *YoutubeManager {
 	return &YoutubeManager{
@@ -35,10 +47,11 @@ func NewYoutubeManager(app *App) *YoutubeManager {
 }
 
 func (y *YoutubeManager) ensureBinary() (string, error) {
-	y.mu.Lock()
-	defer y.mu.Unlock()
+	y.setupMu.Lock()
+	defer y.setupMu.Unlock()
 	if y.binary != "" {
 		if _, err := os.Stat(y.binary); err == nil {
+			y.checkManagedBinaryUpdate(y.binary, false)
 			return y.binary, nil
 		}
 	}
@@ -50,6 +63,7 @@ func (y *YoutubeManager) ensureBinary() (string, error) {
 		if c != "" {
 			if _, err := os.Stat(c); err == nil {
 				y.binary = c
+				y.checkManagedBinaryUpdate(c, false)
 				return c, nil
 			}
 		}
@@ -67,11 +81,51 @@ func (y *YoutubeManager) ensureBinary() (string, error) {
 	return dest, nil
 }
 
+func (y *YoutubeManager) checkManagedBinaryUpdate(exe string, force bool) {
+	managed := filepath.Join(y.app.dir, "yt-dlp.exe")
+	if !samePath(exe, managed) {
+		return
+	}
+	stamp := filepath.Join(y.app.dir, "yt-dlp-update-check")
+	if !force && !ytDLPUpdateDue(stamp, time.Now()) {
+		return
+	}
+
+	y.app.hub.Broadcast(Event{Type: "log", Data: "Checking for yt-dlp updates..."})
+	cmd := exec.Command(exe, "--update-to", "stable")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		_ = os.WriteFile(stamp, []byte("failed"), 0644)
+		y.app.hub.Broadcast(Event{Type: "log", Data: "yt-dlp update check failed; using the installed version: " + strings.TrimSpace(string(out))})
+		return
+	}
+	_ = os.WriteFile(stamp, []byte("ok"), 0644)
+	if force {
+		y.app.hub.Broadcast(Event{Type: "log", Data: "yt-dlp update completed; retrying the YouTube download..."})
+	}
+}
+
+func ytDLPUpdateDue(stamp string, now time.Time) bool {
+	info, err := os.Stat(stamp)
+	if err != nil {
+		return true
+	}
+	interval := ytDLPUpdateInterval
+	if status, readErr := os.ReadFile(stamp); readErr == nil && strings.TrimSpace(string(status)) == "failed" {
+		interval = ytDLPUpdateFailureInterval
+	}
+	return now.Sub(info.ModTime()) >= interval
+}
+
+func samePath(a, b string) bool {
+	a, errA := filepath.Abs(a)
+	b, errB := filepath.Abs(b)
+	return errA == nil && errB == nil && strings.EqualFold(filepath.Clean(a), filepath.Clean(b))
+}
+
 func (y *YoutubeManager) downloadBinary(dest string) error {
-	url := "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
 	y.app.hub.Broadcast(Event{Type: "log", Data: "Downloading yt-dlp..."})
 	client := &http.Client{Timeout: 5 * time.Minute}
-	resp, err := client.Get(url)
+	resp, err := client.Get(ytDLPDownloadURL)
 	if err != nil {
 		return err
 	}
@@ -90,6 +144,110 @@ func (y *YoutubeManager) downloadBinary(dest string) error {
 	}
 	f.Close()
 	return os.Rename(tmp, dest)
+}
+
+func (y *YoutubeManager) ensureDeno() (string, error) {
+	y.setupMu.Lock()
+	defer y.setupMu.Unlock()
+	if y.deno != "" {
+		if _, err := os.Stat(y.deno); err == nil {
+			return y.deno, nil
+		}
+	}
+	if y.denoChecked {
+		return "", fmt.Errorf("Deno is unavailable")
+	}
+	y.denoChecked = true
+
+	candidates := []string{filepath.Join(y.app.dir, "deno.exe")}
+	if p, err := exec.LookPath("deno"); err == nil {
+		candidates = append(candidates, p)
+	}
+	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err == nil {
+			y.deno = candidate
+			return candidate, nil
+		}
+	}
+
+	dest := filepath.Join(y.app.dir, "deno.exe")
+	if err := y.downloadDeno(dest); err != nil {
+		return "", fmt.Errorf("Deno not found and auto-download failed: %w", err)
+	}
+	y.deno = dest
+	return dest, nil
+}
+
+func (y *YoutubeManager) downloadDeno(dest string) error {
+	y.app.hub.Broadcast(Event{Type: "log", Data: "Downloading Deno (needed for YouTube verification; one-time setup)..."})
+	client := &http.Client{Timeout: 5 * time.Minute}
+	resp, err := client.Get(denoDownloadURL)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("Deno download returned %d", resp.StatusCode)
+	}
+
+	archive := dest + ".zip"
+	f, err := os.Create(archive)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(f, resp.Body); err != nil {
+		f.Close()
+		_ = os.Remove(archive)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(archive)
+		return err
+	}
+	defer os.Remove(archive)
+
+	zr, err := zip.OpenReader(archive)
+	if err != nil {
+		return err
+	}
+	defer zr.Close()
+	for _, zf := range zr.File {
+		if filepath.Base(filepath.FromSlash(zf.Name)) != "deno.exe" {
+			continue
+		}
+		rc, err := zf.Open()
+		if err != nil {
+			return err
+		}
+		tmp := dest + ".tmp"
+		out, err := os.Create(tmp)
+		if err != nil {
+			rc.Close()
+			return err
+		}
+		_, copyErr := io.Copy(out, rc)
+		closeErr := out.Close()
+		rc.Close()
+		if copyErr != nil {
+			_ = os.Remove(tmp)
+			return copyErr
+		}
+		if closeErr != nil {
+			_ = os.Remove(tmp)
+			return closeErr
+		}
+		return os.Rename(tmp, dest)
+	}
+	return fmt.Errorf("deno.exe not found in downloaded archive")
+}
+
+func (y *YoutubeManager) youtubeRuntimeArgs() []string {
+	deno, err := y.ensureDeno()
+	if err != nil {
+		y.app.hub.Broadcast(Event{Type: "log", Data: err.Error() + "; YouTube downloads may fail"})
+		return nil
+	}
+	return []string{"--js-runtimes", "deno:" + deno}
 }
 
 func (y *YoutubeManager) ensureFFmpeg() (string, error) {
@@ -201,13 +359,13 @@ type YoutubeEntry struct {
 }
 
 type YoutubeInfo struct {
-	Title       string          `json:"title"`
-	ID          string          `json:"id"`
-	Duration    float64         `json:"duration,omitempty"`
-	Thumbnail   string          `json:"thumbnail,omitempty"`
-	IsPlaylist  bool            `json:"isPlaylist"`
-	Entries     []YoutubeEntry  `json:"entries,omitempty"`
-	Formats     []YoutubeFormat `json:"formats,omitempty"`
+	Title      string          `json:"title"`
+	ID         string          `json:"id"`
+	Duration   float64         `json:"duration,omitempty"`
+	Thumbnail  string          `json:"thumbnail,omitempty"`
+	IsPlaylist bool            `json:"isPlaylist"`
+	Entries    []YoutubeEntry  `json:"entries,omitempty"`
+	Formats    []YoutubeFormat `json:"formats,omitempty"`
 }
 
 type rawInfo struct {
@@ -252,11 +410,13 @@ func (y *YoutubeManager) deleteReq(id string) {
 	y.mu.Unlock()
 }
 
-func (y *YoutubeManager) Info(url string) (*YoutubeInfo, error) {	exe, err := y.ensureBinary()
+func (y *YoutubeManager) Info(url string) (*YoutubeInfo, error) {
+	exe, err := y.ensureBinary()
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(exe, "-J", "--no-warnings", "--flat-playlist", "--no-playlist", url)
+	args := append(y.youtubeRuntimeArgs(), "-J", "--no-warnings", "--flat-playlist", "--no-playlist", url)
+	cmd := exec.Command(exe, args...)
 	out, err := cmd.Output()
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
@@ -300,34 +460,34 @@ func (y *YoutubeManager) Info(url string) (*YoutubeInfo, error) {	exe, err := y.
 				})
 				continue
 			}
-		if f.ACodec == "none" {
-			// video-only stream: offer it merged with the best audio stream
-			if f.Height <= 0 {
+			if f.ACodec == "none" {
+				// video-only stream: offer it merged with the best audio stream
+				if f.Height <= 0 {
+					continue
+				}
+				key := fmt.Sprintf("m:%d:%s", int(f.Height), f.Ext)
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+				res := fmt.Sprintf("%dp", int(f.Height))
+				if f.FPS > 30 {
+					res = fmt.Sprintf("%s %dfps", res, int(f.FPS))
+				}
+				fs := f.Filesize
+				if fs == 0 {
+					fs = f.FilesizeApprox
+				}
+				size := ""
+				if fs > 0 {
+					size = fmt.Sprintf(" • %s", humanSize(fs))
+				}
+				info.Formats = append(info.Formats, YoutubeFormat{
+					ID: f.FormatID + "+bestaudio/best", Ext: f.Ext, Label: fmt.Sprintf("%s • %s (merge)%s", res, f.Ext, size),
+					Height: int(f.Height), FPS: int(f.FPS), VCodec: f.VCodec, Filesize: fs,
+				})
 				continue
 			}
-			key := fmt.Sprintf("m:%d:%s", int(f.Height), f.Ext)
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-			res := fmt.Sprintf("%dp", int(f.Height))
-			if f.FPS > 30 {
-				res = fmt.Sprintf("%s %dfps", res, int(f.FPS))
-			}
-			fs := f.Filesize
-			if fs == 0 {
-				fs = f.FilesizeApprox
-			}
-			size := ""
-			if fs > 0 {
-				size = fmt.Sprintf(" • %s", humanSize(fs))
-			}
-			info.Formats = append(info.Formats, YoutubeFormat{
-				ID: f.FormatID + "+bestaudio/best", Ext: f.Ext, Label: fmt.Sprintf("%s • %s (merge)%s", res, f.Ext, size),
-				Height: int(f.Height), FPS: int(f.FPS), VCodec: f.VCodec, Filesize: fs,
-			})
-			continue
-		}
 			if seen["v:"+f.FormatID] {
 				continue
 			}
@@ -400,7 +560,7 @@ func (y *YoutubeManager) Run(ctx context.Context, d *Download) error {
 		}
 	}
 
-	args := []string{"--newline", "--progress", "--no-warnings"}
+	args := append(y.youtubeRuntimeArgs(), "--newline", "--progress", "--no-warnings")
 	if req.Format != "" && req.Format != "best" {
 		args = append(args, "-f", req.Format)
 	}
@@ -422,19 +582,46 @@ func (y *YoutubeManager) Run(ctx context.Context, d *Download) error {
 	)
 	y.app.hub.Broadcast(Event{Type: "log", Data: "yt-dlp " + strings.Join(args, " ")})
 
+	final, runErr := y.run(ctx, exe, args, d)
+	if runErr != nil && isHTTP403(runErr) {
+		y.app.hub.Broadcast(Event{Type: "log", Data: "YouTube returned HTTP 403; refreshing yt-dlp and retrying once over IPv4..."})
+		y.setupMu.Lock()
+		y.checkManagedBinaryUpdate(exe, true)
+		y.setupMu.Unlock()
+		final, runErr = y.run(ctx, exe, append([]string{"--force-ipv4"}, args...), d)
+	}
+	if runErr != nil {
+		if isHTTP403(runErr) {
+			return fmt.Errorf("yt-dlp failed after an IPv4 retry: %w; turn off any VPN/proxy and try again", runErr)
+		}
+		return runErr
+	}
+	if final == "" {
+		return fmt.Errorf("could not determine output file")
+	}
+	d.FinalFile = final
+	d.Filename = filepath.Base(final)
+	d.TotalSize = d.Downloaded
+	y.app.hub.Broadcast(Event{Type: "update", Data: d.clone()})
+	return nil
+}
+
+func (y *YoutubeManager) run(ctx context.Context, exe string, args []string, d *Download) (string, error) {
 	cmd := exec.CommandContext(ctx, exe, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
+		return "", err
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return err
+		return "", err
 	}
 	if err := cmd.Start(); err != nil {
-		return err
+		return "", err
 	}
 
+	var final string
+	var outputMu sync.Mutex
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		scanner.Buffer(make([]byte, 64*1024), 1024*1024)
@@ -447,9 +634,9 @@ func (y *YoutubeManager) Run(ctx context.Context, d *Download) error {
 				y.updateProgress(d, int64(pct/100.0*float64(total)), total, speed)
 			} else if !strings.HasPrefix(line, "[") {
 				// --print after_move:filepath emits the raw path
-				y.mu.Lock()
-				y.lastOutput = strings.TrimSpace(line)
-				y.mu.Unlock()
+				outputMu.Lock()
+				final = strings.TrimSpace(line)
+				outputMu.Unlock()
 			}
 		}
 	}()
@@ -460,24 +647,19 @@ func (y *YoutubeManager) Run(ctx context.Context, d *Download) error {
 
 	err = cmd.Wait()
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return "", ctx.Err()
 	}
 	if err != nil {
-		return fmt.Errorf("yt-dlp failed: %w: %s", err, strings.TrimSpace(errBuf.String()))
+		return "", fmt.Errorf("yt-dlp failed: %w: %s", err, strings.TrimSpace(errBuf.String()))
 	}
 
-	// final path was printed via --print after_move:filepath
-	y.mu.Lock()
-	final := y.lastOutput
-	y.mu.Unlock()
-	if final == "" {
-		return fmt.Errorf("could not determine output file")
-	}
-	d.FinalFile = final
-	d.Filename = filepath.Base(final)
-	d.TotalSize = d.Downloaded
-	y.app.hub.Broadcast(Event{Type: "update", Data: d.clone()})
-	return nil
+	outputMu.Lock()
+	defer outputMu.Unlock()
+	return final, nil
+}
+
+func isHTTP403(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "http error 403")
 }
 
 var ytProgressRe = regexp.MustCompile(`\[download\]\s+([\d.]+)%\s+of\s+~?\s*([\d.]+)\s*([KMG])?i?B(?:\s+at\s+([\d.]+)\s*([KMG])?i?B/s)?`)

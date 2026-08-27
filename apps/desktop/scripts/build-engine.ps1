@@ -10,9 +10,9 @@ if (-not (Test-Path $go)) { $go = "go" }
 New-Item -ItemType Directory -Path (Split-Path -Parent $out) -Force | Out-Null
 Push-Location $engineDir
 try {
-  & $go build -o $out "."
+  & $go build -buildvcs=false -o $out "."
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally {
   Pop-Location
 }
-if (-not $?) { exit 1 }
 Write-Output "engine built -> $out"
