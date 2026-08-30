@@ -14,7 +14,8 @@
     "build": "npm run build:engine && npm run build:renderer && npm run build:node",
     "start": "electron .",
     "smoke": "npm run build && set BYTERUSH_SMOKE=1&& electron .",
-    "dist": "npm run build && electron-builder --win"
+    "dist": "npm run build && electron-builder --win",
+    "package:extension": "powershell -ExecutionPolicy Bypass -File ../../scripts/package-extension.ps1"
   },
   "dependencies": {
     "react": "^18.3.1",

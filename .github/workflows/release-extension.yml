@@ -1,0 +1,41 @@
+name: Release Browser Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  package-extension:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Package Extension
+        id: package
+        shell: pwsh
+        run: |
+          ./scripts/package-extension.ps1
+          $manifest = Get-Content -Raw apps/extension/manifest.json | ConvertFrom-Json
+          echo "VERSION=$($manifest.version)" >> $env:GITHUB_ENV
+
+      - name: Upload Extension Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: byterush-extension-v${{ env.VERSION }}
+          path: release/byterush-extension-v*.zip
+
+      - name: Attach Extension to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/byterush-extension-v${{ env.VERSION }}.zip
+            release/byterush-extension-latest.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -109,11 +109,20 @@ npm run dist
 The output installer `.exe` will be saved inside `apps/desktop/release/`.
 
 ### 3. Installing Browser Extension (Chrome / Edge / Brave)
+
+**From Releases:**
+1. Download `byterush-extension-v<version>.zip` from [Releases](https://github.com/Shafin5714/byterush-download-manager/releases).
+2. Extract the `.zip` archive to a folder of your choice (e.g., `Documents/ByteRush-Extension`).
+3. Open `chrome://extensions` or `edge://extensions` in your browser.
+4. Toggle on **Developer mode** in the top right corner.
+5. Click **Load unpacked** and select the extracted folder.
+
+**From Source Repository:**
 1. Open `chrome://extensions` or `edge://extensions` in your browser.
 2. Toggle on **Developer mode** in the top right corner.
 3. Click **Load unpacked** and select the `apps/extension/` directory.
-4. The ByteRush extension popup will confirm connection status to the desktop app.
-5. On a YouTube watch page, use the **Download** button beside YouTube's Share action to choose a quality and send the video to ByteRush.
+
+Once loaded, the ByteRush extension popup will confirm connection status to the desktop app. On YouTube watch pages, use the **Download** button to choose a quality and send video streams directly to ByteRush.
 
 ---
 
